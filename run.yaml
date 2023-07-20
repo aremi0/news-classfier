@@ -1,0 +1,134 @@
+# Boot order:
+# elasticsearch,zookeeper,daemon,kafkaserver => logstash => sparkExecutor,kibana
+  
+  version: '3.7'
+
+  services:
+
+    #--- Kafka ---
+    zookeeper:
+        image: tap:kafka
+        container_name: kafkaZK
+        environment:
+            - KAFKA_ACTION=start-zk
+        networks: 
+            tap:
+                ipv4_address: 10.0.100.22
+        deploy:
+          resources:
+            limits:
+              cpus: '0.5'
+              memory: 320m
+
+    kafkaserver:
+        image: tap:kafka
+        container_name: kafkaServer
+        environment:
+            - KAFKA_ACTION=start-kafka
+            #- KAFKA_HEAP_OPTS=-Xmx256M
+        ports:
+            - 9092:9092
+        networks: 
+            tap:
+                ipv4_address: 10.0.100.23
+        restart: on-failure
+        deploy:
+          resources:
+            limits:
+              cpus: '0.6'
+              memory: 500m
+
+    kafka-ui:
+        image: provectuslabs/kafka-ui:latest
+        container_name: kafka-ui
+        environment:
+            - KAFKA_CLUSTERS_0_NAME=local
+            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
+        ports: 
+            - 8080:8080
+        networks: 
+            - tap
+        depends_on:
+            - kafkaserver
+
+    kafkaTopic:
+      image: tap:kafka
+      container_name: kafkaTopic
+      environment:
+          - KAFKA_ACTION=create-topic
+          - KAFKA_PARTITION=2
+          - KAFKA_TOPIC=articles
+      networks: 
+          - tap
+      deploy:
+        resources:
+          limits:
+            cpus: '0.15'
+            memory: 100m
+      depends_on:
+          sparkExecutor:
+            condition: service_started
+          kafkaserver:
+            condition: service_started
+
+    #--- fluentd ---
+    fluentd:
+      container_name: fluentd
+      build:
+        context: ./fluentd
+        dockerfile: Dockerfile
+      volumes:
+        - ./fluentd/conf/prova.conf:/fluentd/etc/fluent.conf
+        - dataframe:/fluentd/dataframe
+      restart: on-failure
+      networks:
+        - tap
+      depends_on:
+          kafkaTopic:
+            condition: service_completed_successfully
+
+
+      
+    #--- Daemon ---
+    daemon:
+      image: tap:daemon
+      container_name: daemon
+      environment:
+        - PYTHONUNBUFFERED=1 # To let python print() be displayed. Comment to mute daemon
+      networks:
+        - tap
+      volumes:
+        - dataframe:/app/dataframe
+
+    #--- Spark ---  
+    sparkExecutor:
+      image: tap:sparkP
+      container_name: sparkExecutor
+      environment:
+        - SPARK_ACTION=bash
+      volumes:
+        - training:/opt/tap/training
+        - sparklibs:/root/.ivy2
+      networks:
+        - tap
+      ports:
+        - 4040:4040
+      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
+      deploy:
+        resources:
+          limits:
+            cpus: '1.1'
+            memory: 1.9g
+
+  volumes:
+    dataframe:
+    training:
+    sparklibs:
+
+  networks:
+    tap:
+        name: tap
+        driver: bridge
+        ipam:
+            config:
+                - subnet: 10.0.100.1/24
