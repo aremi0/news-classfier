@@ -91,11 +91,6 @@
       volumes:
         - training:/opt/tap/training
         - sparklibs:/root/.ivy2
-      deploy:
-        resources:
-          limits:
-            cpus: '4.0'
-            memory: 4g
       networks:
         - tap
       ports:
