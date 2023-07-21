@@ -2,7 +2,7 @@ print("_______________executor________________")
 
 from os.path import exists
 import pyspark.sql.types as types
-from pyspark.sql.functions import from_json, concat_ws, to_date, date_format
+from pyspark.sql.functions import from_json, concat_ws, to_date, date_format, col
 from pyspark.ml import PipelineModel
 from pyspark.sql.session import SparkSession
 from elasticsearch import Elasticsearch
@@ -37,6 +37,7 @@ def process_batch(batch_df, batch_id) :
         print("___batch_df__SIZE: ", batch_df.count())
 
         # Casting non-string column to their original type
+        batch_df = batch_df.withColumn("timestamp", to_date(batch_df.timestamp))
         batch_df = batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "yyyyMMdd"))
         batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
         batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
@@ -107,11 +108,17 @@ df = spark.readStream.format("kafka") \
     .option("includeHeaders", "true") \
     .load()
 
+
+print("__________1___________")
+df.printSchema()
+
 # Cast the message received from kafka with the provided schema
 df = df.selectExpr("CAST(value AS STRING)", "CAST(timestamp AS STRING)") \
-    .alias("fields") \
-    .select(from_json("fields", articlesSchema).alias("data")) \
+    .select(from_json("value", articlesSchema).alias("data")) \
     .select("data.*")
+
+print("__________2___________")
+df.printSchema()
 
 # Apply the machine learning model and select only the interesting columns
 results = model.transform(df) \

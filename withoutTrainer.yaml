@@ -1,5 +1,5 @@
 # Boot order:
-# elasticsearch,zookeeper,daemon,kafkaserver,kafkaUI,kafkaTopic => fluentd => sparkExecutor => kibana
+# zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic => fluentd,sparkExecutor => kibana
   
   version: '3.7'
 
@@ -7,36 +7,41 @@
 
     #--- Kafka ---
     zookeeper:
-      image: tap:kafka
-      container_name: zookeeper
-      environment:
-          - KAFKA_ACTION=start-zk
-      networks: 
-          tap:
-              ipv4_address: 10.0.100.22
-      deploy:
-        resources:
-          limits:
-            cpus: '0.5'
-            memory: 320m
+        image: tap:kafka
+        container_name: kafkaZk
+        environment:
+            - KAFKA_ACTION=start-zk
+        networks: 
+            tap:
+                ipv4_address: 10.0.100.22
+        deploy:
+          resources:
+            limits:
+              cpus: '0.4'
+              memory: 320m
+        healthcheck:
+          test: curl -f elasticsearch:9200 || exit 1
+          interval: 30s
+          retries: 20
+          start_period: 30s
 
     kafkaserver:
-      image: tap:kafka
-      container_name: kafkaserver
-      environment:
-          - KAFKA_ACTION=start-kafka
-          #- KAFKA_HEAP_OPTS=-Xmx256M
-      ports:
-          - 9092:9092
-      networks: 
-          tap:
-              ipv4_address: 10.0.100.23
-      restart: on-failure
-      deploy:
-        resources:
-          limits:
-            cpus: '0.6'
-            memory: 500m
+        image: tap:kafka
+        container_name: kafkaServer
+        environment:
+            - KAFKA_ACTION=start-kafka
+            #- KAFKA_HEAP_OPTS=-Xmx256M
+        ports:
+            - 9092:9092
+        networks: 
+            tap:
+                ipv4_address: 10.0.100.23
+        restart: on-failure
+        deploy:
+          resources:
+            limits:
+              cpus: '0.6'
+              memory: 500m
 
     kafka-ui:
         image: provectuslabs/kafka-ui:latest
@@ -53,8 +58,8 @@
         deploy:
           resources:
             limits:
-              cpus: '0.35'
-              memory: 150m
+              cpus: '0.36'
+              memory: 500m
 
     kafkaTopic:
       image: tap:kafka
@@ -65,13 +70,14 @@
           - KAFKA_TOPIC=articles
       networks: 
           - tap
-      depends_on:
-          - kafkaserver
       deploy:
         resources:
           limits:
             cpus: '0.15'
             memory: 100m
+      depends_on:
+          kafkaserver:
+            condition: service_started
 
     #--- fluentd ---
     fluentd:
@@ -91,9 +97,9 @@
       deploy:
         resources:
           limits:
-            cpus: '0.2'
-            memory: 250m
-          
+            cpus: '0.3'
+            memory: 200m
+
     #--- Daemon ---
     daemon:
       image: tap:daemon
@@ -107,8 +113,8 @@
       deploy:
         resources:
           limits:
-            cpus: '0.2'
-            memory: 200m
+            cpus: '0.8'
+            memory: 500m
 
     #--- Spark ---  
     sparkExecutor:
@@ -124,14 +130,22 @@
       ports:
         - 4040:4040
       command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
-      depends_on:
-        fluentd:
-          condition: service_started
       deploy:
         resources:
           limits:
-            cpus: '1.1'
+            cpus: '0.9'
             memory: 1.9g
+      depends_on:
+          kafkaTopic:
+            condition: service_completed_successfully
+          zookeeper:
+            condition: service_healthy
+      healthcheck:
+        test: curl -f elasticsearch:9200 || exit 1
+        interval: 30s
+        retries: 20
+        start_period: 30s
+
 
     #--- ElasticSearch ---
     elasticsearch:
@@ -158,7 +172,7 @@
       deploy:
         resources:
           limits:
-            cpus: '1.3'
+            cpus: '0.85'
             memory: 1.9g
 
     #--- Kibana ---
@@ -177,12 +191,12 @@
         - xpack.security.enabled=false
       depends_on:
         sparkExecutor:
-          condition: service_started
+          condition: service_healthy
       deploy:
         resources:
           limits:
             cpus: '0.4'
-            memory: 800m
+            memory: '1.0g'
 
   volumes:
     dataframe:
