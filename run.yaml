@@ -1,5 +1,5 @@
 # Boot order:
-# elasticsearch,zookeeper,daemon,kafkaserver => logstash => sparkExecutor,kibana
+# zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic => fluentd,sparkExecutor => kibana
   
   version: '3.7'
 
@@ -8,7 +8,7 @@
     #--- Kafka ---
     zookeeper:
         image: tap:kafka
-        container_name: kafkaZK
+        container_name: kafkaZk
         environment:
             - KAFKA_ACTION=start-zk
         networks: 
@@ -19,6 +19,11 @@
             limits:
               cpus: '0.5'
               memory: 320m
+        healthcheck:
+          test: curl -f elasticsearch:9200 || exit 1
+          interval: 30s
+          retries: 20
+          start_period: 30s
 
     kafkaserver:
         image: tap:kafka
@@ -66,8 +71,6 @@
             cpus: '0.15'
             memory: 100m
       depends_on:
-          sparkExecutor:
-            condition: service_started
           kafkaserver:
             condition: service_started
 
@@ -87,8 +90,6 @@
           kafkaTopic:
             condition: service_completed_successfully
 
-
-      
     #--- Daemon ---
     daemon:
       image: tap:daemon
@@ -118,6 +119,39 @@
         resources:
           limits:
             cpus: '1.1'
+            memory: 1.9g
+      depends_on:
+          kafkaTopic:
+            condition: service_completed_successfully
+          zookeeper:
+            condition: service_healthy
+
+    #--- ElasticSearch ---
+    elasticsearch:
+      container_name: elasticsearch
+      hostname: elasticsearch
+      image: docker.elastic.co/elasticsearch/elasticsearch:8.2.0
+      ports:
+        - "9200:9200"
+        - "9300:9300"      
+      environment:
+        - node.name=elasticsearch
+        - xpack.security.enabled=false
+        - discovery.type=single-node
+        - bootstrap.memory_lock=true
+        - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+        - cluster.routing.allocation.disk.threshold_enabled=false
+      restart: on-failure
+      ulimits:
+        memlock:
+          soft: -1
+          hard: -1
+      networks: 
+        - tap
+      deploy:
+        resources:
+          limits:
+            cpus: '1.3'
             memory: 1.9g
 
   volumes:

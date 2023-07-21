@@ -2,10 +2,10 @@ print("_______________executor________________")
 
 from os.path import exists
 import pyspark.sql.types as types
-from pyspark.sql.functions import from_json, concat_ws
+from pyspark.sql.functions import from_json, concat_ws, to_date, date_format
 from pyspark.ml import PipelineModel
 from pyspark.sql.session import SparkSession
-#from elasticsearch import Elasticsearch
+from elasticsearch import Elasticsearch
 
 trainingPath = "/opt/tap/training/17class"
 
@@ -25,13 +25,23 @@ if not exists(trainingPath):
 
 
 # elasticsearch section ------
-#es = Elasticsearch(elastic_host, verify_certs=False)
+es = Elasticsearch(elastic_host, verify_certs=False)
+print("_____ELASTIC___", type(es))
+es.indices.create(index=elastic_index)
 # -------
 
 # batch_df: results dataframe       <class 'pyspark.sql.dataframe.DataFrame'>
 # batch_id: Batch0, Batch1, ...     <int>
 def process_batch(batch_df, batch_id) :
     print("batch_df: ", type(batch_df), "_____size: ", batch_df.count())
+
+    # Casting non-string column to their original type
+    batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "YYYYMMDD"))
+    batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(FloatType()))
+    batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(FloatType()))
+    print("___batchSchema after casting: ")
+    batch_df.printSchema()
+
     batch_df.show()
     print("batch_id: ", type(batch_id))
     print("___value: ", batch_id)
