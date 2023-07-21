@@ -196,7 +196,7 @@
         resources:
           limits:
             cpus: '0.4'
-            memory: '1.2g'
+            memory: '1.0g'
 
   volumes:
     dataframe:
