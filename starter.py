@@ -3,8 +3,8 @@ import os
 build = input("Do you want to build all docker images? y/n\n")
 if build == "y":
     os.system("docker build ./daemon --tag tap:daemon")
-    os.system("docker build ./logstash --tag tap:logstash")
-    #os.system("docker build ./kafka --tag tap:kafka")
+    os.system("docker build ./fluentd --tag tap:fluentd")
+    os.system("docker build ./kafka --tag tap:kafka")
     os.system("docker build ./spark --tag tap:sparkP")
     os.system("docker build ./kibana --tag tap:kibana")
 else:
