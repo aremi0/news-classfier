@@ -20,41 +20,40 @@ topic = "articles"
 
 
 if not exists(trainingPath):
-    print("Il modello non esiste, devi prima istruire un modello!")
+    print("There's no trained model here! You have to execute Trainer first!")
     exit()
 
 
 # elasticsearch section ------
 es = Elasticsearch(elastic_host, verify_certs=False)
-print("_____ELASTIC___", type(es))
 es.indices.create(index=elastic_index)
 # -------
 
 # batch_df: results dataframe       <class 'pyspark.sql.dataframe.DataFrame'>
 # batch_id: Batch0, Batch1, ...     <int>
 def process_batch(batch_df, batch_id) :
-    print("batch_df: ", type(batch_df), "_____size: ", batch_df.count())
+    if batch_df.count() > 1 :
+        print("___batch_id: ", batch_id)
+        print("___batch_df__SIZE: ", batch_df.count())
 
-    # Casting non-string column to their original type
-    batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "YYYYMMDD"))
-    batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(FloatType()))
-    batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(FloatType()))
-    print("___batchSchema after casting: ")
-    batch_df.printSchema()
+        # Casting non-string column to their original type
+        batch_df = batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "yyyyMMdd"))
+        batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
+        batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
+        #print("___batchSchema after casting: ")
+        #batch_df.printSchema()
 
-    batch_df.show()
-    print("batch_id: ", type(batch_id))
-    print("___value: ", batch_id)
-    batch_id.show()
-    '''
-    for idx, row in enumerate(batch_df.collect()) :
-        row_dict = row.asDict()
-        print(row_dict)
-        id = f'{batch_id}-{idx}'
-        resp = es.index(index=elastic_index, id=id, document=row_dict)
-        print(resp)
-    batch_df.show()
-    '''
+        #batch_df.show()
+
+
+        for idx, row in enumerate(batch_df.collect()) :
+            row_dict = row.asDict()
+            #print("___row_dict: ", row_dict)
+            id = f'{batch_id}-{idx}'
+            resp = es.index(index=elastic_index, id=id, document=row_dict)
+
+        print("___data sended to elasticsearch...")
+        batch_df.show()
 
 
 
@@ -117,7 +116,7 @@ results = model.transform(df) \
     .select("title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode", \
             "ActionGeo_Lat", "ActionGeo_Long")
 
-print("___SCHEMA")
+print("___RAW_SCHEMA")
 results.printSchema()
 print("___ENTRIES")
 
