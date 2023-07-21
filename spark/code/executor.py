@@ -48,7 +48,7 @@ def process_batch(batch_df, batch_id) :
 
         for idx, row in enumerate(batch_df.collect()) :
             row_dict = row.asDict()
-            #print("___row_dict: ", row_dict)
+            print("___row_dict: ", row_dict)
             id = f'{batch_id}-{idx}'
             resp = es.index(index=elastic_index, id=id, document=row_dict)
 
@@ -74,6 +74,7 @@ def process_batch(batch_df, batch_id) :
 # spark section------
 # Define articles schema structure
 articlesSchema = types.StructType([
+    types.StructField(name='timestamp', dataType=types.StringType()),
     types.StructField(name='_c0', dataType=types.StringType()),
     types.StructField(name='EVENT_ID', dataType=types.StringType()),
     types.StructField(name='PUBLISH_DATE', dataType=types.StringType()),
@@ -107,13 +108,14 @@ df = spark.readStream.format("kafka") \
     .load()
 
 # Cast the message received from kafka with the provided schema
-df = df.selectExpr("CAST(value AS STRING)") \
-    .select(from_json("value", articlesSchema).alias("data")) \
+df = df.selectExpr("CAST(value AS STRING)", "CAST(timestamp AS STRING)") \
+    .alias("fields") \
+    .select(from_json("fields", articlesSchema).alias("data")) \
     .select("data.*")
 
 # Apply the machine learning model and select only the interesting columns
 results = model.transform(df) \
-    .select("title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode", \
+    .select("timestamp", "title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode", \
             "ActionGeo_Lat", "ActionGeo_Long")
 
 print("___RAW_SCHEMA")
