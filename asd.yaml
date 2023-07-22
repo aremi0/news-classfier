@@ -19,7 +19,7 @@
       deploy:
         resources:
           limits:
-            cpus: '0.9'
+            cpus: '0.7'
             memory: 1.9g
 
   volumes:

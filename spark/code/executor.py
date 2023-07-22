@@ -1,41 +1,64 @@
 print("_______________executor________________")
 
+from pyspark.sql import SparkSession
+from pyspark.conf import SparkConf
+from pyspark import SparkContext
+from elasticsearch import Elasticsearch
 from os.path import exists
 import pyspark.sql.types as types
-from pyspark.sql.functions import from_json, concat_ws, to_date, date_format, col, to_json
+from pyspark.sql.functions import from_json, concat_ws, to_date, date_format, col, to_json, array
 from pyspark.ml import PipelineModel
-from pyspark.sql.session import SparkSession
-from elasticsearch import Elasticsearch
+
 
 trainingPath = "/opt/tap/training/17class"
-
 APP_NAME = 'news-classfier'
-APP_BATCH_INTERVAL = 1
 
 elastic_host="http://elasticsearch:9200"
-news_index="news_index"
-geo_index="geo_index"
+elastic_index="news_index"
+
 kafkaServer="kafkaServer:9092"
 topic = "articles"
 
 
+# Define elasticsearch schema to be sended
+elastic_mapping = {
+    "mappings": {
+        "properties": 
+            {
+                "title": {"type": "text"},
+                "publish_date": {"type": "date"},
+                "predictedString": {"type": "text"},
+                "country_code": {"type": "text"},
+                "location": {"type": "geo_point"}
+            }
+    }
+}
 
-if not exists(trainingPath):
-    print("There's no trained model here! You have to execute Trainer first!")
-    exit()
+# Define articles schema structure to be readed from kafka
+articlesSchema = types.StructType([
+    types.StructField(name='_c0', dataType=types.StringType()),
+    types.StructField(name='event_id', dataType=types.StringType()),
+    types.StructField(name='publish_date', dataType=types.StringType()),
+    types.StructField(name='country_code', dataType=types.StringType()),
+    types.StructField(name='latitude', dataType=types.StringType()),
+    types.StructField(name='longitude', dataType=types.StringType()),
+    types.StructField(name='source_url', dataType=types.StringType()),
+    types.StructField(name='title', dataType=types.StringType()),
+    types.StructField(name='text', dataType=types.StringType()),
+])
 
 
-# elasticsearch section ------
-es = Elasticsearch(elastic_host, verify_certs=False)
-es.indices.create(index=news_index, ignore=400)
-es.indices.create(index=geo_index, ignore=400)
-# -------
 
 
 
 
-# batch_df: results dataframe       <class 'pyspark.sql.dataframe.DataFrame'>
-# batch_id: Batch0, Batch1, ...     <int>
+
+
+
+
+
+
+
 def process_batch(batch_df, batch_id) :
     if batch_df.count() > 1 :
         print("___batch_id: ", batch_id)
@@ -67,90 +90,78 @@ def process_batch(batch_df, batch_id) :
         batch_df.show()
 
 
-
-'''
- #   Column                 Non-Null Count  Dtype  
----  ------                 --------------  -----  
- 0   Unnamed: 0             19 non-null     int64  
- 1   EVENT_ID               19 non-null     int64  
- 2   PUBLISH_DATE           19 non-null     int64  
- 3   ActionGeo_CountryCode  19 non-null     object 
- 4   ActionGeo_Lat          19 non-null     float64
- 5   ActionGeo_Long         19 non-null     float64
- 6   SOURCEURL              19 non-null     object 
- 7   title                  19 non-null     object 
- 8   text                   18 non-null     object 
-'''
-
-# spark section------
-# Define articles schema structure
-articlesSchema = types.StructType([
-    types.StructField(name='_c0', dataType=types.StringType()),
-    types.StructField(name='EVENT_ID', dataType=types.StringType()),
-    types.StructField(name='PUBLISH_DATE', dataType=types.StringType()),
-    types.StructField(name='ActionGeo_CountryCode', dataType=types.StringType()),
-    types.StructField(name='ActionGeo_Lat', dataType=types.StringType()),
-    types.StructField(name='ActionGeo_Long', dataType=types.StringType()),
-    types.StructField(name='SOURCEURL', dataType=types.StringType()),
-    types.StructField(name='title', dataType=types.StringType()),
-    types.StructField(name='text', dataType=types.StringType()),
-])
-
-# create a new spark session
-spark = SparkSession.builder.master("local[*]")\
-                            .appName(APP_NAME)\
-                            .getOrCreate()
-spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
-
-print("Loading pre-trained model from: ", trainingPath, "...")
-model = PipelineModel.load(trainingPath)
-print("... loaded.")
-# ------
-
-# Streaming Query section ------
-print("Reading stream from kafka...")
-# Read the stream from kafka
-df = spark.readStream.format("kafka") \
-    .option("kafka.bootstrap.servers", kafkaServer) \
-    .option("startingOffsets", "earliest") \
-    .option("subscribe", topic) \
-    .option("includeHeaders", "true") \
-    .load()
+#results.writeStream\
+#.foreachBatch(process_batch) \
+#.start() \
+#.awaitTermination()
 
 
-print("__________1___________")
-df.printSchema()
 
-# Cast the message received from kafka with the provided schema
-df = df.selectExpr("CAST(value AS STRING)") \
-    .select(from_json("value", articlesSchema).alias("data")) \
-    .select("data.*")
+def main() :
+    if not exists(trainingPath):
+        print("There's no trained model here! You have to execute Trainer first!")
+        exit()
 
-print("__________2___________")
-df.printSchema()
 
-# Apply the machine learning model and select only the interesting columns
-results = model.transform(df) \
-    .select("title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode", \
-            "ActionGeo_Lat", "ActionGeo_Long")
+    # create a new spark session
+    sparkConf = SparkConf().set("es.nodes", "elasticsearch") \
+                            .set("es.port", "9200")
+    sc = SparkContext(appName=APP_NAME, conf=sparkConf)
+    spark = SparkSession(sc)
+    sc.setLogLevel("ERROR")
 
-print("___RAW_SCHEMA")
-results.printSchema()
-print("___ENTRIES")
+    # create elasticsearch session and index
+    es = Elasticsearch(elastic_host, verify_certs=False)
+    es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
-'''
-# Write the stream to elasticsearch
-result.writeStream \
-    .format("console") \
-    .outputMode("append") \
-    .start() \
-    .awaitTermination()
-'''
 
-results.writeStream\
-.foreachBatch(process_batch) \
-.start() \
-.awaitTermination()
+    print("Loading trained model...")
+    model = PipelineModel.load(trainingPath)
+
+
+    print("Reading stream from kafka...")
+    df = spark.readStream.format("kafka") \
+        .option("kafka.bootstrap.servers", kafkaServer) \
+        .option("startingOffsets", "earliest") \
+        .option("subscribe", topic) \
+        .load() \
+        .select(from_json(col("value").cast("string"), articlesSchema).alias("data")) \
+        .selectExpr("data.*")
+
+    # Apply the machine learning model and select only the interesting casted columns
+    df = model.transform(df) \
+        .withColumn("latitude", df.latitude.cast(types.FloatType())) \
+        .withColumn("longitude", df.longitude.cast(types.FloatType())) \
+        .withColumn("publish_date", to_date(df.publish_date, "yyyyMMdd")) \
+        .withColumn('location', array(col('longitude'), col('latidude'))) \
+        .select("timestamp", "title", "publish_date", "predictedString", \
+        "country_code", "location")
+
+    # write to elasticsearch (in batch)
+    df.writeStream \
+        .option("checkpointLocation", "/save/location") \
+        .format("es") \
+        .start(elastic_index) \
+        .awaitTermination()
+
+
+if __name__ == "__main__":
+    main()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 '''
 

@@ -13,7 +13,7 @@ TIMER = 30.0
 
 async def scraper(rowDF, session, index, dataframe):
     try:
-        async with session.get(url=rowDF['SOURCEURL']) as results:
+        async with session.get(url=rowDF['source_url']) as results:
             resp = await results.text()
 
             soup = BeautifulSoup(resp, 'html.parser')
@@ -50,12 +50,12 @@ async def parallelizer(dataframe) :
     
 def extractData(zip, fileName) :
     my_cols = [str(i) for i in range(61)] # create some col names
-    my_cols[0] = "EVENT_ID"
-    my_cols[1] = "PUBLISH_DATE"
-    my_cols[54] = "ActionGeo_CountryCode"
-    my_cols[56] = "ActionGeo_Lat"
-    my_cols[57] = "ActionGeo_Long"
-    my_cols[60] = "SOURCEURL"
+    my_cols[0] = "event_id"
+    my_cols[1] = "publish_date"
+    my_cols[54] = "country_code"
+    my_cols[56] = "latitude"
+    my_cols[57] = "longitude"
+    my_cols[60] = "source_url"
     sourceDF = pandas.read_csv(zip.open(fileName), sep="\t", header=None, names=my_cols, usecols=[0, 1, 54, 56, 57, 60])
     #print(sourceDF.info(verbose=True))
     #print(sourceDF[["EVENT_ID", "PUBLISH_DATE"]])
@@ -91,7 +91,7 @@ def main() :
 
         # Cleaning dataframe section-----
         filteredDF = dataframe.dropna() # Remove rows which contain any missing values (mostly GEO info)
-        filteredDF = filteredDF.drop_duplicates(subset='SOURCEURL', keep="first") # Remove duplicates urls rows (a lot of rows...)
+        filteredDF = filteredDF.drop_duplicates(subset='source_url', keep="first") # Remove duplicates urls rows (a lot of rows...)
         webstNumber = len(filteredDF)
         filteredDF = filteredDF.assign(title=numpy.nan, text=numpy.nan) # Adding new column 'title' and text filled with nan
         print(filteredDF.info(verbose=True))
