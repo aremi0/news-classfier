@@ -43,23 +43,24 @@
               cpus: '0.6'
               memory: 500m
 
-    kafka-ui:
-        image: provectuslabs/kafka-ui:latest
-        container_name: kafka-ui
-        environment:
-            - KAFKA_CLUSTERS_0_NAME=local
-            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
-        ports: 
-            - 8080:8080
-        networks: 
-            - tap
-        depends_on:
-            - kafkaserver
-        deploy:
-          resources:
-            limits:
-              cpus: '0.36'
-              memory: 500m
+# Lightweight un paio di palle, il mio pc non regge anche lui...
+#    kafka-ui:
+#        image: provectuslabs/kafka-ui:latest
+#        container_name: kafka-ui
+#        environment:
+#            - KAFKA_CLUSTERS_0_NAME=local
+#            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
+#        ports: 
+#            - 8080:8080
+#        networks: 
+#            - tap
+#        depends_on:
+#            - kafkaserver
+#        deploy:
+#          resources:
+#            limits:
+#              cpus: '0.36'
+#              memory: 500m
 
     kafkaTopic:
       image: tap:kafka

@@ -2,7 +2,7 @@ print("_______________executor________________")
 
 from os.path import exists
 import pyspark.sql.types as types
-from pyspark.sql.functions import from_json, concat_ws, to_date, date_format, col
+from pyspark.sql.functions import from_json, concat_ws, to_date, date_format, col, to_json
 from pyspark.ml import PipelineModel
 from pyspark.sql.session import SparkSession
 from elasticsearch import Elasticsearch
@@ -24,6 +24,8 @@ if not exists(trainingPath):
     exit()
 
 
+
+
 # elasticsearch section ------
 es = Elasticsearch(elastic_host, verify_certs=False)
 es.indices.create(index=elastic_index)
@@ -37,10 +39,18 @@ def process_batch(batch_df, batch_id) :
         print("___batch_df__SIZE: ", batch_df.count())
 
         # Casting non-string column to their original type
-        batch_df = batch_df.withColumn("timestamp", to_date(batch_df.timestamp))
         batch_df = batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "yyyyMMdd"))
-        batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
-        batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
+
+        #newsDF = batch_df.select("title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode")
+        #geoDF = batch_df.select("title", "predictedString", "ActionGeo_Lat", "ActionGeo_Long")
+        #geoDF = geoDF.withColumn("GEO", geoDF["ActionGeo_Lat"] + geoDF["ActionGeo_Long"])
+
+        #batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
+        #batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
+
+
+        batch_df = batch_df.withColumn("GEO", batch_df["ActionGeo_Lat"] + "," + batch_df["ActionGeo_Long"])
+
         #print("___batchSchema after casting: ")
         #batch_df.printSchema()
 
@@ -75,7 +85,6 @@ def process_batch(batch_df, batch_id) :
 # spark section------
 # Define articles schema structure
 articlesSchema = types.StructType([
-    types.StructField(name='timestamp', dataType=types.StringType()),
     types.StructField(name='_c0', dataType=types.StringType()),
     types.StructField(name='EVENT_ID', dataType=types.StringType()),
     types.StructField(name='PUBLISH_DATE', dataType=types.StringType()),
@@ -113,7 +122,7 @@ print("__________1___________")
 df.printSchema()
 
 # Cast the message received from kafka with the provided schema
-df = df.selectExpr("CAST(value AS STRING)", "CAST(timestamp AS STRING)") \
+df = df.selectExpr("CAST(value AS STRING)") \
     .select(from_json("value", articlesSchema).alias("data")) \
     .select("data.*")
 
@@ -122,7 +131,7 @@ df.printSchema()
 
 # Apply the machine learning model and select only the interesting columns
 results = model.transform(df) \
-    .select("timestamp", "title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode", \
+    .select("title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode", \
             "ActionGeo_Lat", "ActionGeo_Long")
 
 print("___RAW_SCHEMA")
