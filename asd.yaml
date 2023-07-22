@@ -1,0 +1,36 @@
+  version: '3.7'
+
+  services:
+    
+    #--- Spark ---  
+    sparkExecutor:
+      image: tap:sparkP
+      container_name: sparkExecutor
+      environment:
+        - SPARK_ACTION=bash
+      volumes:
+        - training:/opt/tap/training
+        - sparklibs:/root/.ivy2
+      networks:
+        - tap
+      ports:
+        - 4040:4040
+      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
+      deploy:
+        resources:
+          limits:
+            cpus: '0.9'
+            memory: 1.9g
+
+  volumes:
+    dataframe:
+    training:
+    sparklibs:
+
+  networks:
+    tap:
+        name: tap
+        driver: bridge
+        ipam:
+            config:
+                - subnet: 10.0.100.1/24

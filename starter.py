@@ -23,5 +23,5 @@ else:
 # localhost:8080 to see kafka-UI (broker status, topic, messages, ...)
 # localhost:4040 to see spark-cluster
 # localhost:9200 to see elasticsearch-cluster
-# localhost:9200/news_es to see elasticsearch index created in sparkExecutor
+# localhost:9200/es_index to see elasticsearch index created in sparkExecutor
 # localhost:5601 for kibana data views
