@@ -13,7 +13,8 @@ APP_NAME = 'news-classfier'
 APP_BATCH_INTERVAL = 1
 
 elastic_host="http://elasticsearch:9200"
-elastic_index="news_es"
+news_index="news_index"
+geo_index="geo_index"
 kafkaServer="kafkaServer:9092"
 topic = "articles"
 
@@ -24,12 +25,14 @@ if not exists(trainingPath):
     exit()
 
 
-
-
 # elasticsearch section ------
 es = Elasticsearch(elastic_host, verify_certs=False)
-es.indices.create(index=elastic_index)
+es.indices.create(index=news_index, ignore=400)
+es.indices.create(index=geo_index, ignore=400)
 # -------
+
+
+
 
 # batch_df: results dataframe       <class 'pyspark.sql.dataframe.DataFrame'>
 # batch_id: Batch0, Batch1, ...     <int>
@@ -40,28 +43,25 @@ def process_batch(batch_df, batch_id) :
 
         # Casting non-string column to their original type
         batch_df = batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "yyyyMMdd"))
-
-        #newsDF = batch_df.select("title", "PUBLISH_DATE", "predictedString", "ActionGeo_CountryCode")
-        #geoDF = batch_df.select("title", "predictedString", "ActionGeo_Lat", "ActionGeo_Long")
-        #geoDF = geoDF.withColumn("GEO", geoDF["ActionGeo_Lat"] + geoDF["ActionGeo_Long"])
-
-        #batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
-        #batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
-
-
-        batch_df = batch_df.withColumn("GEO", batch_df["ActionGeo_Lat"] + "," + batch_df["ActionGeo_Long"])
-
-        #print("___batchSchema after casting: ")
-        #batch_df.printSchema()
-
-        #batch_df.show()
-
+        batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
+        batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
 
         for idx, row in enumerate(batch_df.collect()) :
             row_dict = row.asDict()
-            print("___row_dict: ", row_dict)
+
             id = f'{batch_id}-{idx}'
-            resp = es.index(index=elastic_index, id=id, document=row_dict)
+
+
+
+
+            geo_dict = {'title': row_dict.get("title"), 'category': row_dict.get("predictedString"), \
+                'location': {'type': 'geo_point', 'lat': row_dict.get("ActionGeo_Lat"), 'long': row_dict.get("ActionGeo_Long")}}
+
+
+            print("___row_dict: ", row_dict)
+            print("___row_geo: ", geo_dict)
+            es.index(index=geo_index, id=id, document=geo_dict)
+            es.index(index=news_index, id=id, document=row_dict)
 
         print("___data sended to elasticsearch...")
         batch_df.show()
