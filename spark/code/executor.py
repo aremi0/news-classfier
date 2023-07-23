@@ -57,12 +57,33 @@ es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
 
 
-
-
-
-
-
 def process_batch(batch_df, batch_id) :
+    if batch_df.count() > 1 :
+        print("___batch_id: ", batch_id)
+        print("___batch_df__SIZE: ", batch_df.count())
+
+        # Casting non-string column to their original type
+        #batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
+        #batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
+        #print("___batchSchema after casting: ")
+        batch_df.printSchema()
+
+        batch_df.show()
+
+        
+        for idx, row in enumerate(batch_df.collect()) :
+            row_dict = row.asDict()
+            #print("___row_dict: ", row_dict)
+            id = f'{batch_id}-{idx}'
+            resp = es.index(index=elastic_index, id=id, document=row_dict)
+
+        print("___data sended to elasticsearch...")
+        batch_df.show()
+
+
+
+
+def process_batch11111111(batch_df, batch_id) :
     if batch_df.count() > 1 :
         print("___batch_id: ", batch_id)
         print("___batch_df__SIZE: ", batch_df.count())
@@ -93,19 +114,19 @@ def main() :
 
 
     # create a new spark session
-    #spark = SparkSession.builder.master("local[*]")\
-    #                            .appName(APP_NAME)\
-    #                            .getOrCreate()
-    #spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
+    spark = SparkSession.builder.master("local[*]")\
+                                .appName(APP_NAME)\
+                                .getOrCreate()
+    spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
 
 
 
     # create a new spark session
-    sparkConf = SparkConf().set("es.nodes", "elasticsearch") \
-                            .set("es.port", "9200")
-    sc = SparkContext(appName=APP_NAME, conf=sparkConf)
-    spark = SparkSession(sc)
-    sc.setLogLevel("ERROR")
+    #sparkConf = SparkConf().set("es.nodes", "elasticsearch") \
+    #                        .set("es.port", "9200")
+    #sc = SparkContext(appName=APP_NAME, conf=sparkConf)
+    #spark = SparkSession(sc)
+    #sc.setLogLevel("ERROR")
 
 
 
@@ -136,19 +157,18 @@ def main() :
         "country_code", "location")
 
 
-    #df.writeStream\
-    #.foreachBatch(process_batch) \
-    #.start() \
-    #.awaitTermination()
+    df.writeStream\
+    .foreachBatch(process_batch) \
+    .start() \
+    .awaitTermination()
 
 
     # write to elasticsearch (in batch)
-    df.writeStream \
-        .option("checkpointLocation", "/save/location") \
-        .format("es") \
-        .foreachBatch(process_batch) \
-        .start() \
-        .awaitTermination()
+    #df.writeStream \
+    #    .option("checkpointLocation", "/save/location") \
+    #    .format("es") \
+    #    .start(elastic_index) \
+    #    .awaitTermination()
 
 
 if __name__ == "__main__":
