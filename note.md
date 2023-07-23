@@ -70,3 +70,27 @@ Il dataframe consiste in un  file CSV malformattato che causa problemi durante i
 Ogni sito è strutturato in maniera differente, il che è un problema per lo scraping.
 ===> Risolto filtrando soltanto i siti con una determinata struttura.
 
+sparkTrainer  | +--------------+
+sparkTrainer  | |category      |
+sparkTrainer  | +--------------+
+sparkTrainer  | |SPORTS        |
+sparkTrainer  | |POLITICS      |
+sparkTrainer  | |ENTERTAINMENT |
+sparkTrainer  | |ENVIRONMENT   |
+sparkTrainer  | |TECH          |
+sparkTrainer  | |BUSINESS      |
+sparkTrainer  | |STYLE & BEAUTY|
+sparkTrainer  | |RELIGION      |
+sparkTrainer  | |EDUCATION     |
+sparkTrainer  | |TRAVEL        |
+sparkTrainer  | |CRIME         |
+sparkTrainer  | |RIGHTS        |
+sparkTrainer  | |FOOD & DRINK  |
+sparkTrainer  | |ARTS & CULTURE|
+sparkTrainer  | |WORLD NEWS    |
+sparkTrainer  | |SCIENCE       |
+sparkTrainer  | |WELLNESS      |
+sparkTrainer  | +--------------+
+sparkTrainer  | 
+sparkTrainer  | 
+sparkTrainer  | ___There are:  17  class...
