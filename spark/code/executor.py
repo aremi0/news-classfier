@@ -27,8 +27,8 @@ elastic_mapping = {
             {
                 "timestamp": {"type": "date"},
                 "title": {"type": "text"},
-                "publish_date": {"type": "date"},
-                "predictedString": {"type": "text"},
+                "publish_date": {"type": "date", "format": "yyyy-MM-dd"},
+                "predictedString": {"type": "text", "fielddata": True},
                 "country_code": {"type": "text"},
                 "location": {"type": "geo_point"}
             }
@@ -93,19 +93,19 @@ def main() :
 
 
     # create a new spark session
-    spark = SparkSession.builder.master("local[*]")\
-                                .appName(APP_NAME)\
-                                .getOrCreate()
-    spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
+    #spark = SparkSession.builder.master("local[*]")\
+    #                            .appName(APP_NAME)\
+    #                            .getOrCreate()
+    #spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
 
 
 
     # create a new spark session
-    #sparkConf = SparkConf().set("es.nodes", "elasticsearch") \
-    #                        .set("es.port", "9200")
-    #sc = SparkContext(appName=APP_NAME, conf=sparkConf)
-    #spark = SparkSession(sc)
-    #sc.setLogLevel("ERROR")
+    sparkConf = SparkConf().set("es.nodes", "elasticsearch") \
+                            .set("es.port", "9200")
+    sc = SparkContext(appName=APP_NAME, conf=sparkConf)
+    spark = SparkSession(sc)
+    sc.setLogLevel("ERROR")
 
 
 
@@ -138,18 +138,18 @@ def main() :
         "country_code", "location")
 
 
-    df.writeStream\
-    .foreachBatch(process_batch) \
-    .start() \
-    .awaitTermination()
+    #df.writeStream\
+    #.foreachBatch(process_batch) \
+    #.start() \
+    #.awaitTermination()
 
 
     # write to elasticsearch (in batch)
-    #df.writeStream \
-    #    .option("checkpointLocation", "/save/location") \
-    #    .format("es") \
-    #    .start(elastic_index) \
-    #    .awaitTermination()
+    df.writeStream \
+        .option("checkpointLocation", "/save/location") \
+        .format("es") \
+        .start(elastic_index) \
+        .awaitTermination()
 
 
 if __name__ == "__main__":
