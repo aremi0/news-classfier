@@ -83,7 +83,35 @@
             cpus: '0.3'
             memory: 200m
 
+    #--- Daemon ---
+    daemon:
+      image: tap:daemon
+      container_name: daemon
+      environment:
+        - PYTHONUNBUFFERED=1 # To let python print() be displayed. Comment to mute daemon
+      networks:
+        - tap
+      volumes:
+        - dataframe:/app/dataframe
+      deploy:
+        resources:
+          limits:
+            cpus: '0.8'
+            memory: 500m
 
+    kafka-ui:
+        image: provectuslabs/kafka-ui:latest
+        container_name: kafkaWebUI
+        environment:
+            - KAFKA_CLUSTERS_0_NAME=local
+            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
+        ports: 
+            - 8080:8080
+        networks: 
+            - tap
+        depends_on:
+            kafkaserver:
+              condition: service_started
 
     #--- ElasticSearch ---
     elasticsearch:

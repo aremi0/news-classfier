@@ -25,6 +25,7 @@ elastic_mapping = {
     "mappings": {
         "properties": 
             {
+                "timestamp": {"type": "date"},
                 "title": {"type": "text"},
                 "publish_date": {"type": "date"},
                 "predictedString": {"type": "text"},
@@ -36,12 +37,13 @@ elastic_mapping = {
 
 # Define articles schema structure to be readed from kafka
 articlesSchema = types.StructType([
+    types.StructField(name='timestamp', dataType=types.StringType()),
     types.StructField(name='_c0', dataType=types.StringType()),
     types.StructField(name='event_id', dataType=types.StringType()),
     types.StructField(name='publish_date', dataType=types.StringType()),
     types.StructField(name='country_code', dataType=types.StringType()),
     types.StructField(name='latitude', dataType=types.StringType()),
-    types.StructField(name='longitude', dataType=types.StringType()),
+    types.StructField(name='longitude', dataType=types.FloatType()),
     types.StructField(name='source_url', dataType=types.StringType()),
     types.StructField(name='title', dataType=types.StringType()),
     types.StructField(name='text', dataType=types.StringType()),
@@ -111,8 +113,8 @@ def main() :
     sc.setLogLevel("ERROR")
 
     # create elasticsearch session and index
-    es = Elasticsearch(elastic_host, verify_certs=False)
-    es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
+    #es = Elasticsearch(elastic_host, verify_certs=False)
+    #es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
 
     print("Loading trained model...")
@@ -125,8 +127,9 @@ def main() :
         .option("startingOffsets", "earliest") \
         .option("subscribe", topic) \
         .load() \
-        .select(from_json(col("value").cast("string"), articlesSchema).alias("data")) \
-        .selectExpr("data.*")
+        .select(from_json(col("value").cast("string"), articlesSchema).alias("data"), \
+                from_json(col("timestamp").cast("string"), articlesSchema).alias("tmps")) \
+        .selectExpr("data.*", "tmps.timestamp")
 
     # Apply the machine learning model and select only the interesting casted columns
     df = model.transform(df) \
@@ -136,6 +139,15 @@ def main() :
         .withColumn('location', array(col('longitude'), col('latidude'))) \
         .select("timestamp", "title", "publish_date", "predictedString", \
         "country_code", "location")
+
+
+
+
+
+
+    # create elasticsearch session and index
+    es = Elasticsearch(elastic_host, verify_certs=False)
+    es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
     # write to elasticsearch (in batch)
     df.writeStream \
