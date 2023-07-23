@@ -19,17 +19,17 @@ elastic_index="news_index"
 kafkaServer="kafkaServer:9092"
 topic = "articles"
 
-
+#** timestamp format
 # Define elasticsearch schema to be sended
 elastic_mapping = {
     "mappings": {
         "properties": 
             {
-                "timestamp": {"type": "date"},
+                "timestamp": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss.SSS"},
                 "title": {"type": "text"},
-                "publish_date": {"type": "date", "format": "yyyy-MM-dd"},
+                "publish_date": {"type": "date", "format": "yyyyMMdd"},
                 "predictedString": {"type": "text", "fielddata": True},
-                "country_code": {"type": "text"},
+                "country_code": {"type": "text", "fielddata": True},
                 "location": {"type": "geo_point"}
             }
     }
@@ -126,13 +126,11 @@ def main() :
         .selectExpr("timestamp", "data.*") \
         .na.drop() # There is only one row that container all headers to None that cause crash
 
-
+#** cast timestamp
     # Apply the machine learning model and select only the interesting casted columns
     df = model.transform(df) \
         .withColumn("latitude", df.latitude.cast(types.FloatType())) \
         .withColumn("longitude", df.longitude.cast(types.FloatType())) \
-        .withColumn("timestamp", df.timestamp.cast(types.TimestampType())) \
-        .withColumn("publish_date", to_date(df.publish_date, "yyyyMMdd")) \
         .withColumn('location', array(col('latitude'), col('longitude'))) \
         .select("timestamp", "title", "publish_date", "predictedString", \
         "country_code", "location")
@@ -148,7 +146,8 @@ def main() :
     df.writeStream \
         .option("checkpointLocation", "/save/location") \
         .format("es") \
-        .start(elastic_index) \
+        .foreachBatch(process_batch) \
+        .start() \
         .awaitTermination()
 
 
