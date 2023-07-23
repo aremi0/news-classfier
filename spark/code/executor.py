@@ -37,13 +37,12 @@ elastic_mapping = {
 
 # Define articles schema structure to be readed from kafka
 articlesSchema = types.StructType([
-    types.StructField(name='timestamp', dataType=types.StringType()),
     types.StructField(name='_c0', dataType=types.StringType()),
     types.StructField(name='event_id', dataType=types.StringType()),
     types.StructField(name='publish_date', dataType=types.StringType()),
     types.StructField(name='country_code', dataType=types.StringType()),
     types.StructField(name='latitude', dataType=types.StringType()),
-    types.StructField(name='longitude', dataType=types.FloatType()),
+    types.StructField(name='longitude', dataType=types.StringType()),
     types.StructField(name='source_url', dataType=types.StringType()),
     types.StructField(name='title', dataType=types.StringType()),
     types.StructField(name='text', dataType=types.StringType()),
@@ -52,7 +51,9 @@ articlesSchema = types.StructType([
 
 
 
-
+# create elasticsearch session and index
+es = Elasticsearch(elastic_host, verify_certs=False)
+es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
 
 
@@ -67,35 +68,21 @@ def process_batch(batch_df, batch_id) :
         print("___batch_df__SIZE: ", batch_df.count())
 
         # Casting non-string column to their original type
-        batch_df = batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "yyyyMMdd"))
-        batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
-        batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
+        #batch_df = batch_df.withColumn("PUBLISH_DATE", to_date(batch_df.PUBLISH_DATE, "yyyyMMdd"))
+        #batch_df = batch_df.withColumn("ActionGeo_Lat", batch_df.ActionGeo_Lat.cast(types.FloatType()))
+        #batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
 
         for idx, row in enumerate(batch_df.collect()) :
             row_dict = row.asDict()
 
             id = f'{batch_id}-{idx}'
 
-
-
-
-            geo_dict = {'title': row_dict.get("title"), 'category': row_dict.get("predictedString"), \
-                'location': {'type': 'geo_point', 'lat': row_dict.get("ActionGeo_Lat"), 'long': row_dict.get("ActionGeo_Long")}}
-
-
             print("___row_dict: ", row_dict)
-            print("___row_geo: ", geo_dict)
-            es.index(index=geo_index, id=id, document=geo_dict)
-            es.index(index=news_index, id=id, document=row_dict)
+            es.index(index=elastic_index, id=id, document=row_dict)
 
         print("___data sended to elasticsearch...")
         batch_df.show()
 
-
-#results.writeStream\
-#.foreachBatch(process_batch) \
-#.start() \
-#.awaitTermination()
 
 
 
@@ -106,55 +93,63 @@ def main() :
 
 
     # create a new spark session
-    sparkConf = SparkConf().set("es.nodes", "elasticsearch") \
-                            .set("es.port", "9200")
-    sc = SparkContext(appName=APP_NAME, conf=sparkConf)
-    spark = SparkSession(sc)
-    sc.setLogLevel("ERROR")
+    spark = SparkSession.builder.master("local[*]")\
+                                .appName(APP_NAME)\
+                                .getOrCreate()
+    spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
 
-    # create elasticsearch session and index
-    #es = Elasticsearch(elastic_host, verify_certs=False)
-    #es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
+
+
+    # create a new spark session
+    #sparkConf = SparkConf().set("es.nodes", "elasticsearch") \
+    #                        .set("es.port", "9200")
+    #sc = SparkContext(appName=APP_NAME, conf=sparkConf)
+    #spark = SparkSession(sc)
+    #sc.setLogLevel("ERROR")
+
+
 
 
     print("Loading trained model...")
     model = PipelineModel.load(trainingPath)
 
 
+    # Timestamp will be extracted from kafka
     print("Reading stream from kafka...")
     df = spark.readStream.format("kafka") \
         .option("kafka.bootstrap.servers", kafkaServer) \
         .option("startingOffsets", "earliest") \
         .option("subscribe", topic) \
         .load() \
-        .select(from_json(col("value").cast("string"), articlesSchema).alias("data"), \
-                from_json(col("timestamp").cast("string"), articlesSchema).alias("tmps")) \
-        .selectExpr("data.*", "tmps.timestamp")
+        .selectExpr("CAST(timestamp AS STRING)", "CAST(value AS STRING)") \
+        .select("timestamp", from_json(col("value").cast("string"), articlesSchema).alias("data")) \
+        .selectExpr("timestamp", "data.*") \
+        .na.drop() # There is only one row that container all headers to None that cause crash
+
 
     # Apply the machine learning model and select only the interesting casted columns
     df = model.transform(df) \
         .withColumn("latitude", df.latitude.cast(types.FloatType())) \
         .withColumn("longitude", df.longitude.cast(types.FloatType())) \
+        .withColumn("timestamp", df.timestamp.cast(types.TimestampType())) \
         .withColumn("publish_date", to_date(df.publish_date, "yyyyMMdd")) \
-        .withColumn('location', array(col('longitude'), col('latidude'))) \
+        .withColumn('location', array(col('latitude'), col('longitude'))) \
         .select("timestamp", "title", "publish_date", "predictedString", \
         "country_code", "location")
 
 
+    df.writeStream\
+    .foreachBatch(process_batch) \
+    .start() \
+    .awaitTermination()
 
-
-
-
-    # create elasticsearch session and index
-    es = Elasticsearch(elastic_host, verify_certs=False)
-    es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
     # write to elasticsearch (in batch)
-    df.writeStream \
-        .option("checkpointLocation", "/save/location") \
-        .format("es") \
-        .start(elastic_index) \
-        .awaitTermination()
+    #df.writeStream \
+    #    .option("checkpointLocation", "/save/location") \
+    #    .format("es") \
+    #    .start(elastic_index) \
+    #    .awaitTermination()
 
 
 if __name__ == "__main__":
