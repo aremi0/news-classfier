@@ -156,6 +156,7 @@ def main() :
     # Apply the machine learning model and select only the interesting casted columns
     df = model.transform(df) \
         .withColumn("timestamp", df.timestamp.cast(types.TimestampNTZType())) \
+        .withColumn("publish_date", to_date(df.publish_date, "yyyyMMdd")) \
         .withColumn("latitude", df.latitude.cast(types.DoubleType())) \
         .withColumn("longitude", df.longitude.cast(types.DoubleType())) \
         .withColumn("location", array(col('longitude'), col('latitude'))) \
