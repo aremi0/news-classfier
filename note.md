@@ -94,3 +94,6 @@ sparkTrainer  | +--------------+
 sparkTrainer  | 
 sparkTrainer  | 
 sparkTrainer  | ___There are:  17  class...
+
+
+Prediction accuracy: 74.5%
