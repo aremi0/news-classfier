@@ -26,10 +26,10 @@ elastic_mapping = {
         "properties": 
             {
                 "title": {"type": "text"},
-                "publish_date": {"type": "date", "format": "yyyyMMdd"},
-                "predictedString": {"type": "text", "fielddata": True},
-                "prediction": {"type": "integer", "fielddata": True},
-                "country_code": {"type": "text", "fielddata": True},
+                "publish_date": {"type": "date", "format": "yyyy-MM-dd"},
+                "predictedString": {"type": "text"},
+                "prediction": {"type": "byte"},
+                "country_code": {"type": "text"},
                 "location": {"type": "geo_point"}
             }
     }
@@ -156,6 +156,7 @@ def main() :
         .withColumn("latitude", df.latitude.cast(types.DoubleType())) \
         .withColumn("longitude", df.longitude.cast(types.DoubleType())) \
         .withColumn("location", array(col('longitude'), col('latitude'))) \
+        .withColumn("publish_date", to_date(df.publish_date, "yyyyMMdd"))
 
     result = df.select("title", "publish_date", "predictedString", \
                         "prediction", "country_code", "location") \
