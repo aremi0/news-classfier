@@ -25,6 +25,7 @@ elastic_mapping = {
     "mappings": {
         "properties": 
             {
+                "timestamp": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss.SSS"},
                 "title": {"type": "text"},
                 "publish_date": {"type": "date", "format": "yyyyMMdd"},
                 "predictedString": {"type": "text", "fielddata": True},
@@ -150,14 +151,16 @@ def main() :
         .selectExpr("timestamp", "data.*") \
         .na.drop() # There is only one row that container all headers to None that cause crash
 
+
 #** cast timestamp
     # Apply the machine learning model and select only the interesting casted columns
     df = model.transform(df) \
+        .withColumn("timestamp", df.timestamp.cast(types.TimestampNTZType())) \
         .withColumn("latitude", df.latitude.cast(types.DoubleType())) \
         .withColumn("longitude", df.longitude.cast(types.DoubleType())) \
         .withColumn("location", array(col('longitude'), col('latitude'))) \
 
-    result = df.select("title", "publish_date", "predictedString", \
+    result = df.select("timestamp", "title", "publish_date", "predictedString", \
                         "prediction", "country_code", "location") \
     .withColumn("prediction", df.prediction.cast(types.IntegerType()))
 
