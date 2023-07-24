@@ -28,9 +28,9 @@ elastic_mapping = {
                 "timestamp": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss.SSS"},
                 "title": {"type": "text"},
                 "publish_date": {"type": "date", "format": "yyyyMMdd"},
-                "predictedString": {"type": "text", "fielddata": True},
-                "prediction": {"type": "integer", "fielddata": True},
-                "country_code": {"type": "text", "fielddata": True},
+                "predictedString": {"type": "text"},
+                "prediction": {"type": "byte"},
+                "country_code": {"type": "text"},
                 "location": {"type": "geo_point"}
             }
     }
