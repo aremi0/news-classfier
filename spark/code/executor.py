@@ -25,10 +25,10 @@ elastic_mapping = {
     "mappings": {
         "properties": 
             {
-                "timestamp": {"type": "date", "format": "yyyy-MM-dd HH:mm:ss.SSS"},
                 "title": {"type": "text"},
                 "publish_date": {"type": "date", "format": "yyyyMMdd"},
                 "predictedString": {"type": "text", "fielddata": True},
+                "prediction": {"type": "integer", "fielddata": True},
                 "country_code": {"type": "text", "fielddata": True},
                 "location": {"type": "geo_point"}
             }
@@ -45,7 +45,7 @@ articlesSchema = types.StructType([
     types.StructField(name='longitude', dataType=types.StringType()),
     types.StructField(name='source_url', dataType=types.StringType()),
     types.StructField(name='title', dataType=types.StringType()),
-    types.StructField(name='text', dataType=types.StringType()),
+    types.StructField(name='text', dataType=types.StringType())
 ])
 
 
@@ -67,6 +67,9 @@ def process_batch(batch_df, batch_id) :
         #batch_df = batch_df.withColumn("ActionGeo_Long", batch_df.ActionGeo_Long.cast(types.FloatType()))
         #print("___batchSchema after casting: ")
         batch_df.printSchema()
+
+        #print("_______batch_df_timestamp_formatted...")
+        #batch_df.select("timestamp").show(truncate=False)
 
         batch_df.show()
 
@@ -150,14 +153,15 @@ def main() :
 #** cast timestamp
     # Apply the machine learning model and select only the interesting casted columns
     df = model.transform(df) \
-        .withColumn("latitude", df.latitude.cast(types.FloatType())) \
-        .withColumn("longitude", df.longitude.cast(types.FloatType())) \
-        .withColumn('location', array(col('latitude'), col('longitude'))) \
-        .select("timestamp", "title", "publish_date", "predictedString", \
-        "country_code", "location")
+        .withColumn("latitude", df.latitude.cast(types.DoubleType())) \
+        .withColumn("longitude", df.longitude.cast(types.DoubleType())) \
+        .withColumn("location", array(col('longitude'), col('latitude'))) \
 
+    result = df.select("title", "publish_date", "predictedString", \
+                        "prediction", "country_code", "location") \
+    .withColumn("prediction", df.prediction.cast(types.IntegerType()))
 
-    df.writeStream\
+    result.writeStream\
     .foreachBatch(process_batch) \
     .start() \
     .awaitTermination()
