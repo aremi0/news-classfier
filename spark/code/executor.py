@@ -26,7 +26,7 @@ elastic_mapping = {
                 "publish_date": {"type": "date", "format": "yyyy-MM-dd"},
                 "predictedString": {"type": "text", "fielddata": True},
                 "prediction": {"type": "byte"},
-                "country_code": {"type": "text"},
+                "country_code": {"type": "keyword"},
                 "location": {"type": "geo_point"}
             }
     }
