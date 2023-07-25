@@ -1,5 +1,5 @@
 # Boot order:
-# zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic => fluentd,sparkExecutor => kibana
+# zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic,kibana => fluentd,sparkExecutor
   
   version: '3.7'
 
@@ -62,6 +62,22 @@
           kafkaserver:
             condition: service_started
 
+
+   # kafka-ui:
+   #     image: provectuslabs/kafka-ui:latest
+   #     container_name: kafkaWebUI
+   #     environment:
+   #         - KAFKA_CLUSTERS_0_NAME=local
+   #         - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
+   #     ports: 
+   #         - 8080:8080
+   #     networks: 
+   #         - tap
+   #     depends_on:
+   #         kafkaserver:
+   #           condition: service_started
+
+
     #--- fluentd ---
     fluentd:
       container_name: fluentd
@@ -99,20 +115,6 @@
             cpus: '0.7'
             memory: 500m
 
-    kafka-ui:
-        image: provectuslabs/kafka-ui:latest
-        container_name: kafkaWebUI
-        environment:
-            - KAFKA_CLUSTERS_0_NAME=local
-            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
-        ports: 
-            - 8080:8080
-        networks: 
-            - tap
-        depends_on:
-            kafkaserver:
-              condition: service_started
-
     #--- ElasticSearch ---
     elasticsearch:
       container_name: elasticsearch
@@ -140,6 +142,32 @@
           limits:
             cpus: '0.55'
             memory: 1.9g
+
+
+    #--- Spark ---  
+    sparkExecutor:
+      image: tap:sparkP
+      container_name: sparkExecutor
+      environment:
+        - SPARK_ACTION=bash
+      volumes:
+        - training:/opt/tap/training
+        - sparklibs:/root/.ivy2
+      networks:
+        - tap
+      ports:
+        - 4040:4040
+      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
+      deploy:
+        resources:
+          limits:
+            cpus: '0.55'
+            memory: 1.9g
+      depends_on:
+          kafkaTopic:
+            condition: service_completed_successfully
+          zookeeper:
+            condition: service_healthy
 
 
     #--- Kibana ---
