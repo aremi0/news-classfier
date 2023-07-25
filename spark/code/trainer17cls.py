@@ -59,7 +59,7 @@ def dataframeCleaner(df) :
     df = df.withColumn("text", concat_ws(" ", "headline", "short_description")) # Add a new column 'text' by concatinating 'headline' and 'short_description'
     df = df.select("category", "text") # Remove old text columns
 
-    df = df.select(regexp_replace("category", "[^a-zA-Z0-9\&]+", "").alias("category"), \
+    df = df.select(regexp_replace("category", "[^a-zA-Z0-9]+", "").alias("category"), \
                     regexp_replace("text", "[^a-zA-Z0-9\s]+", "").alias("text")) # Replace all the not (^) specified char with empty (will replace special char)
 
     return df
