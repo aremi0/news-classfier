@@ -17,7 +17,7 @@
         deploy:
           resources:
             limits:
-              cpus: '0.35'
+              cpus: '0.3'
               memory: 320m
         healthcheck:
           test: curl -f elasticsearch:9200 || exit 1
@@ -40,7 +40,7 @@
         deploy:
           resources:
             limits:
-              cpus: '0.35'
+              cpus: '0.3'
               memory: 500m
 
 
@@ -140,7 +140,7 @@
       deploy:
         resources:
           limits:
-            cpus: '0.55'
+            cpus: '0.5'
             memory: 1.9g
 
 
@@ -161,7 +161,7 @@
       deploy:
         resources:
           limits:
-            cpus: '0.55'
+            cpus: '0.5'
             memory: 1.9g
       depends_on:
           kafkaTopic:
