@@ -61,7 +61,7 @@ SOURCEURL
 Il demone ha il compito di interrogare ogni 15 minuti (tempo di update della sorgente) l'url della sorgente al fine di ottenere
 ad ogni iterazione del loop l'ultimo dataframe caricato.
 Molte delle voci del dataframe calcolate tramite machine learning risultano imprecise o null.
-===> Risolto estraendo esclusivamente la voce ['SOURCEURL'] del dataframe, il resto lo otterrò con scraping e MLlib
+===> Risolto estraendo esclusivamente le colonne non-null più rilevanti per il progetto, il resto lo otterrò con scraping e MLlib
 
 Il dataframe consiste in un  file CSV malformattato che causa problemi durante il reading
 (sia in python che aprendolo con un normale programma).
