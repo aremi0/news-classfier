@@ -1,88 +1,11 @@
 # Boot order:
-# sparkTrainer => elasticsearch,zookeeper,daemon,kafkaserver => logstash,kafkaUI,sparkExecutor,kibana
+# sparkTrainer => zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic,kibana => fluentd,sparkExecutor
   
   version: '3.7'
 
   services:
 
-    #--- Kafka ---
-    zookeeper:
-        image: tap:kafka
-        container_name: kafkaZK
-        environment:
-            - KAFKA_ACTION=start-zk
-        networks: 
-            tap:
-                ipv4_address: 10.0.100.22
-        depends_on:
-         sparkTrainer:
-            condition: service_completed_successfully
-
-    kafkaserver:
-        image: tap:kafka
-        container_name: kafkaServer
-        environment:
-            - KAFKA_ACTION=start-kafka
-            #- KAFKA_HEAP_OPTS=-Xmx256M
-        ports:
-            - 9092:9092
-        networks: 
-            tap:
-                ipv4_address: 10.0.100.23
-        healthcheck:
-          test: curl -f http://elasticsearch:9200 || exit 1
-          interval: 60s
-          retries: 10
-          start_period: 20s
-        depends_on:
-          sparkTrainer:
-              condition: service_completed_successfully
-
-    kafka-ui:
-        image: provectuslabs/kafka-ui:latest
-        container_name: kafkaWebUI
-        environment:
-            - KAFKA_CLUSTERS_0_NAME=local
-            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
-        ports: 
-            - 8080:8080
-        networks: 
-            - tap
-        depends_on:
-            kafkaserver:
-              condition: service_healthy
-
-
-    #--- Logstash ---
-    logstash:
-      image: tap:logstash   
-      networks: 
-        - tap
-      environment:
-        - XPACK_MONITORING_ENABLED=false
-        - KAFKA_OUTPUT_BOOTSTRAP_SERVERS=kafkaserver:9092
-        - KAFKA_OUTPUT_TOPIC=articles
-      volumes:
-        - ./logstash/pipeline/progetto.conf:/usr/share/logstash/pipeline/logstash.conf
-        - dataframe:/usr/share/logstash/dataframe
-      depends_on:
-        kafkaserver:
-          condition: service_healthy
-
-    #--- Daemon ---
-    daemon:
-      image: tap:daemon
-      environment:
-        - PYTHONUNBUFFERED=1 # To let python print() be displayed. Comment to mute daemon
-      networks:
-        - tap
-      volumes:
-        - dataframe:/app/dataframe
-      depends_on:
-         sparkTrainer:
-            condition: service_completed_successfully
-
-    #--- Spark ---  
+    #--- Spark Trainer---  
     sparkTrainer:
       image: tap:sparkP
       container_name: sparkTrainer
@@ -99,27 +22,124 @@
       # to run an interactive container for exploring the machine:
       # docker run --entrypoint /bin/bash -v training:/opt/tap/training -it tap:sparkP
 
-    sparkExecutor:
-      image: tap:sparkP
-      container_name: sparkExecutor
+    #--- Kafka ---
+    zookeeper:
+        image: tap:kafka
+        container_name: kafkaZk
+        environment:
+            - KAFKA_ACTION=start-zk
+        networks: 
+            tap:
+                ipv4_address: 10.0.100.22
+        deploy:
+          resources:
+            limits:
+              cpus: '0.3'
+              memory: 320m
+        healthcheck:
+          test: curl -f elasticsearch:9200 || exit 1
+          interval: 30s
+          retries: 20
+          start_period: 30s
+        depends_on:
+         sparkTrainer:
+            condition: service_completed_successfully
+
+    kafkaserver:
+        image: tap:kafka
+        container_name: kafkaServer
+        environment:
+            - KAFKA_ACTION=start-kafka
+            #- KAFKA_HEAP_OPTS=-Xmx256M
+        ports:
+            - 9092:9092
+        networks: 
+            tap:
+                ipv4_address: 10.0.100.23
+        restart: on-failure
+        deploy:
+          resources:
+            limits:
+              cpus: '0.3'
+              memory: 500m
+        depends_on:
+         zookeeper:
+            condition: service_started
+
+
+    kafkaTopic:
+      image: tap:kafka
+      container_name: kafkaTopic
       environment:
-        - SPARK_ACTION=bash
-      volumes:
-        - training:/opt/tap/training
-        - sparklibs:/root/.ivy2
+          - KAFKA_ACTION=create-topic
+          - KAFKA_PARTITION=2
+          - KAFKA_TOPIC=articles
+      networks: 
+          - tap
       deploy:
         resources:
           limits:
-            cpus: '4.0'
-            memory: 4g
+            cpus: '0.10'
+            memory: 100m
+      depends_on:
+          kafkaserver:
+            condition: service_started
+
+
+   # kafka-ui:
+   #     image: provectuslabs/kafka-ui:latest
+   #     container_name: kafkaWebUI
+   #     environment:
+   #         - KAFKA_CLUSTERS_0_NAME=local
+   #         - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
+   #     ports: 
+   #         - 8080:8080
+   #     networks: 
+   #         - tap
+   #     depends_on:
+   #         kafkaserver:
+   #           condition: service_started
+
+
+    #--- fluentd ---
+    fluentd:
+      container_name: fluentd
+      build:
+        context: ./fluentd
+        dockerfile: Dockerfile
+      volumes:
+        - ./fluentd/conf/prova.conf:/fluentd/etc/fluent.conf
+        - dataframe:/fluentd/dataframe
+      restart: on-failure
       networks:
         - tap
-      ports:
-        - 4040:4040
-      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
       depends_on:
-        kafkaserver:
-          condition: service_healthy
+          kafkaTopic:
+            condition: service_completed_successfully
+      deploy:
+        resources:
+          limits:
+            cpus: '0.25'
+            memory: 200m
+
+    #--- Daemon ---
+    daemon:
+      image: tap:daemon
+      container_name: daemon
+      environment:
+        - PYTHONUNBUFFERED=1 # To let python print() be displayed. Comment to mute daemon
+      networks:
+        - tap
+      volumes:
+        - dataframe:/app/dataframe
+      deploy:
+        resources:
+          limits:
+            cpus: '0.7'
+            memory: 500m
+      depends_on:
+         sparkTrainer:
+            condition: service_completed_successfully
 
     #--- ElasticSearch ---
     elasticsearch:
@@ -136,15 +156,48 @@
         - bootstrap.memory_lock=true
         - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
         - cluster.routing.allocation.disk.threshold_enabled=false
+      restart: on-failure
       ulimits:
         memlock:
           soft: -1
           hard: -1
       networks: 
         - tap
+      deploy:
+        resources:
+          limits:
+            cpus: '0.5'
+            memory: 1.9g
       depends_on:
          sparkTrainer:
             condition: service_completed_successfully
+
+
+    #--- Spark ---  
+    sparkExecutor:
+      image: tap:sparkP
+      container_name: sparkExecutor
+      environment:
+        - SPARK_ACTION=bash
+      volumes:
+        - training:/opt/tap/training
+        - sparklibs:/root/.ivy2
+      networks:
+        - tap
+      ports:
+        - 4040:4040
+      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
+      deploy:
+        resources:
+          limits:
+            cpus: '0.5'
+            memory: 1.9g
+      depends_on:
+          kafkaTopic:
+            condition: service_completed_successfully
+          zookeeper:
+            condition: service_healthy
+
 
     #--- Kibana ---
     kibana:
@@ -160,9 +213,14 @@
         - 5601:5601
       environment:
         - xpack.security.enabled=false
+      deploy:
+        resources:
+          limits:
+            cpus: '0.3'
+            memory: '800m'
       depends_on:
-        kafkaserver:
-          condition: service_healthy
+         sparkTrainer:
+            condition: service_completed_successfully
 
   volumes:
     dataframe:

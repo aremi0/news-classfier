@@ -1,5 +1,5 @@
 # Boot order:
-# zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic => fluentd,sparkExecutor => kibana
+# zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic,kibana => fluentd,sparkExecutor
   
   version: '3.7'
 
@@ -17,7 +17,7 @@
         deploy:
           resources:
             limits:
-              cpus: '0.4'
+              cpus: '0.3'
               memory: 320m
         healthcheck:
           test: curl -f elasticsearch:9200 || exit 1
@@ -40,27 +40,9 @@
         deploy:
           resources:
             limits:
-              cpus: '0.6'
+              cpus: '0.3'
               memory: 500m
 
-# Lightweight un paio di palle, il mio pc non regge anche lui...
-#    kafka-ui:
-#        image: provectuslabs/kafka-ui:latest
-#        container_name: kafka-ui
-#        environment:
-#            - KAFKA_CLUSTERS_0_NAME=local
-#            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
-#        ports: 
-#            - 8080:8080
-#        networks: 
-#            - tap
-#        depends_on:
-#            - kafkaserver
-#        deploy:
-#          resources:
-#            limits:
-#              cpus: '0.36'
-#              memory: 500m
 
     kafkaTopic:
       image: tap:kafka
@@ -74,11 +56,27 @@
       deploy:
         resources:
           limits:
-            cpus: '0.15'
+            cpus: '0.10'
             memory: 100m
       depends_on:
           kafkaserver:
             condition: service_started
+
+
+   # kafka-ui:
+   #     image: provectuslabs/kafka-ui:latest
+   #     container_name: kafkaWebUI
+   #     environment:
+   #         - KAFKA_CLUSTERS_0_NAME=local
+   #         - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
+   #     ports: 
+   #         - 8080:8080
+   #     networks: 
+   #         - tap
+   #     depends_on:
+   #         kafkaserver:
+   #           condition: service_started
+
 
     #--- fluentd ---
     fluentd:
@@ -98,7 +96,7 @@
       deploy:
         resources:
           limits:
-            cpus: '0.3'
+            cpus: '0.25'
             memory: 200m
 
     #--- Daemon ---
@@ -114,39 +112,8 @@
       deploy:
         resources:
           limits:
-            cpus: '0.8'
+            cpus: '0.7'
             memory: 500m
-
-    #--- Spark ---  
-    sparkExecutor:
-      image: tap:sparkP
-      container_name: sparkExecutor
-      environment:
-        - SPARK_ACTION=bash
-      volumes:
-        - training:/opt/tap/training
-        - sparklibs:/root/.ivy2
-      networks:
-        - tap
-      ports:
-        - 4040:4040
-      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
-      deploy:
-        resources:
-          limits:
-            cpus: '0.9'
-            memory: 1.9g
-      depends_on:
-          kafkaTopic:
-            condition: service_completed_successfully
-          zookeeper:
-            condition: service_healthy
-      healthcheck:
-        test: curl -f elasticsearch:9200 || exit 1
-        interval: 30s
-        retries: 20
-        start_period: 30s
-
 
     #--- ElasticSearch ---
     elasticsearch:
@@ -173,8 +140,35 @@
       deploy:
         resources:
           limits:
-            cpus: '0.85'
+            cpus: '0.5'
             memory: 1.9g
+
+
+    #--- Spark ---  
+    sparkExecutor:
+      image: tap:sparkP
+      container_name: sparkExecutor
+      environment:
+        - SPARK_ACTION=bash
+      volumes:
+        - training:/opt/tap/training
+        - sparklibs:/root/.ivy2
+      networks:
+        - tap
+      ports:
+        - 4040:4040
+      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
+      deploy:
+        resources:
+          limits:
+            cpus: '0.5'
+            memory: 1.9g
+      depends_on:
+          kafkaTopic:
+            condition: service_completed_successfully
+          zookeeper:
+            condition: service_healthy
+
 
     #--- Kibana ---
     kibana:
@@ -190,14 +184,11 @@
         - 5601:5601
       environment:
         - xpack.security.enabled=false
-      depends_on:
-        sparkExecutor:
-          condition: service_healthy
       deploy:
         resources:
           limits:
-            cpus: '0.4'
-            memory: '1.0g'
+            cpus: '0.3'
+            memory: '800m'
 
   volumes:
     dataframe:
