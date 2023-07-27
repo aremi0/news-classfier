@@ -13,7 +13,7 @@ else:
 
     if trainer == "y" :
         print("It will take a bit, pyspark set log-level('error') so there will be no log on terminal\n")
-        os.system("docker compose -f ./withTrainer up")
+        os.system("docker compose -f ./withTrainer.yaml up")
     else :
         print("As you want...\n")
         os.system("docker compose -f ./withoutTrainer.yaml up")
