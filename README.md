@@ -1,4 +1,13 @@
 # World News Classfier
+
+## TODO:
+- Modificare il demone per fargli scaricare parte del database di GDELT, così da avere a fne pipeline quache milione di record in kibana.
+- Modificare sparkExector in modo da fargli elaborare soltanto una volta i dataframe "vecchi", salvandoli magari in un volume convidiviso. Quindi dovrà soltanto inviare i dati già elaborati ad elasticsearch e poi elaborare qualli che arrivano in real-time.
+- Eliminare la batch in elasticsearch facendogli mandare direttamente i dati a kibana.
+- Sistemare in elasticsearch/kibana il date format per usare potenzialmente sia il timestamp che il publish_date come riferimento temporale.
+- Migliorare la presentazione.
+- Aggiungere altre visualizzazioni grafiche.
+---
 This project aim to collect, analyze and classify webnews from all over the world and clearly display the processed data in organized dashboards.
 
 Every specific aspects of the project, in each of its parts, are explained in the documentation (in Italian). In addition, the source code is properly commented (in English).
