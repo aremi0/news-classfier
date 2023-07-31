@@ -23,9 +23,11 @@ elastic_mapping = {
         "properties": 
             {
                 "title": {"type": "text"},
+                "description": {"type": "text"},
                 "publish_date": {"type": "date", "format": "yyyy-MM-dd"},
                 "predictedString": {"type": "text", "fielddata": True},
                 "prediction": {"type": "byte"},
+                "country_name": {"type": "text"},
                 "country_code": {"type": "keyword"},
                 "location": {"type": "geo_point"}
             }
@@ -35,13 +37,14 @@ elastic_mapping = {
 # Define articles schema structure to be readed from kafka
 articlesSchema = types.StructType([
     types.StructField(name='_c0', dataType=types.StringType()),
-    types.StructField(name='event_id', dataType=types.StringType()),
     types.StructField(name='publish_date', dataType=types.StringType()),
+    types.StructField(name='country_name', dataType=types.StringType()),
     types.StructField(name='country_code', dataType=types.StringType()),
     types.StructField(name='latitude', dataType=types.StringType()),
     types.StructField(name='longitude', dataType=types.StringType()),
     types.StructField(name='source_url', dataType=types.StringType()),
     types.StructField(name='title', dataType=types.StringType()),
+    types.StructField(name='description', dataType=types.StringType()),
     types.StructField(name='text', dataType=types.StringType())
 ])
 
@@ -101,8 +104,8 @@ def main() :
         .withColumn("location", array(col('longitude'), col('latitude'))) \
         .withColumn("publish_date", to_date(df.publish_date, "yyyyMMdd"))
 
-    result = df.select("title", "publish_date", "predictedString", \
-                        "prediction", "country_code", "location") \
+    result = df.select("title", "description", "publish_date", "predictedString", \
+                        "prediction","country_name", "country_code", "location") \
     .withColumn("prediction", df.prediction.cast(types.IntegerType()))
 
     result.writeStream\

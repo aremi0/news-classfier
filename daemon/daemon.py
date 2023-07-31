@@ -33,6 +33,7 @@ async def scraper(rowDF, session, index, dataframe):
                     text = title + " " + description # will be used by machine learning later
 
                     dataframe.at[index, "title"] = title
+                    dataframe.at[index, "description"] = description
                     dataframe.at[index, "text"] = re.sub("[^a-zA-Z0-9\s]+", "", text)
 
     except Exception as e:
@@ -50,13 +51,13 @@ async def parallelizer(dataframe) :
     
 def extractData(zip, fileName) :
     my_cols = [str(i) for i in range(61)] # create some col names
-    my_cols[0] = "event_id"
     my_cols[1] = "publish_date"
+    my_cols[52] = "country_name"
     my_cols[53] = "country_code"
     my_cols[56] = "latitude"
     my_cols[57] = "longitude"
     my_cols[60] = "source_url"
-    sourceDF = pandas.read_csv(zip.open(fileName), sep="\t", header=None, names=my_cols, usecols=[0, 1, 53, 56, 57, 60])
+    sourceDF = pandas.read_csv(zip.open(fileName), sep="\t", header=None, names=my_cols, usecols=[1, 52, 53, 56, 57, 60])
     #print(sourceDF.info(verbose=True))
     #print(sourceDF[["EVENT_ID", "PUBLISH_DATE"]])
     return sourceDF
@@ -91,11 +92,11 @@ def main() :
 
         # Cleaning dataframe section-----
         filteredDF = dataframe.query("latitude != longitude") # Remove rows with bugged lat/long
-        filteredDF = dataframe.dropna(subset = ["publish_date", \
+        filteredDF = filteredDF.dropna(subset = ["publish_date", "country_name", \
             "country_code", "latitude", "longitude", "source_url"]) # Remove rows which not contain any important values (mostly GEO info)
         filteredDF = filteredDF.drop_duplicates(subset='source_url', keep="first") # Remove duplicates urls rows (a lot of rows...)
         webstNumber = len(filteredDF)
-        filteredDF = filteredDF.assign(title=numpy.nan, text=numpy.nan) # Adding new column 'title' and text filled with nan
+        filteredDF = filteredDF.assign(title=numpy.nan, description=numpy.nan, text=numpy.nan) # Adding new column 'title' and text filled with nan
         print(filteredDF.info(verbose=True))
         print("-------------------")
 
