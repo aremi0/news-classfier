@@ -1,0 +1,35 @@
+# Boot order:
+# zookeeper,kafkaserver,kafka-ui,daemon,elasticsearch,kafkaTopic,kibana => fluentd,sparkExecutor
+  
+  version: '3.7'
+
+  services:
+
+    #--- Daemon ---
+    daemon:
+      image: tap:daemon
+      container_name: daemon
+      environment:
+        - PYTHONUNBUFFERED=1 # To let python print() be displayed. Comment to mute daemon
+      networks:
+        - tap
+      volumes:
+        - dataframe:/app/dataframe
+      deploy:
+        resources:
+          limits:
+            cpus: '0.7'
+            memory: 500m
+
+  volumes:
+    dataframe:
+    training:
+    sparklibs:
+
+  networks:
+    tap:
+        name: tap
+        driver: bridge
+        ipam:
+            config:
+                - subnet: 10.0.100.1/24

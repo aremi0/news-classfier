@@ -9,6 +9,6 @@ RUN mkdir /app/dataframe
 
 COPY . .
 
-CMD ["python3", "./daemon.py"]
+CMD ["python3", "./nonRTDaemon.py"]
 
 # docker build . --tag tap:daemon
