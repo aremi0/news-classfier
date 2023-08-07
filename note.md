@@ -51,6 +51,7 @@ Actor2Geo_FeatureID
 ActionGeo_Type
 ActionGeo_FullName
 ActionGeo_CountryCode
+
 ActionGeo_ADM1Code
 ActionGeo_Lat
 ActionGeo_Long

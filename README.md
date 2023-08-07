@@ -8,6 +8,10 @@
 - [x] Aggiungere più info in kibana.
 - [ ] Migliorare la presentazione.
 - [ ] Aggiungere altre visualizzazioni grafiche.
+---  
+Attualmente il demone scaricherà i dataframe del giorno odierno caricati fino all'istante in cui viene lanciato.  
+Fluentd non ha la capacità di eliminare i file dopo la lettura, perciò bisognerà eliminare manualmente il volume "dataframe"
+
 ---
 This project aim to collect, analyze and classify webnews from all over the world and clearly display the processed data in organized dashboards.
 
