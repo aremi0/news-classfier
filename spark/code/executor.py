@@ -4,11 +4,11 @@ from pyspark.sql import SparkSession
 from elasticsearch import Elasticsearch
 from os.path import exists
 import pyspark.sql.types as types
-from pyspark.sql.functions import from_json, to_date, col, array
+from pyspark.sql.functions import from_json, to_date, col, array, to_timestamp
 from pyspark.ml import PipelineModel
 
 
-trainingPath = "/opt/tap/training/17class"
+trainingPath = "/opt/tap/training"
 APP_NAME = 'news-classfier'
 
 elastic_host="http://elasticsearch:9200"
@@ -24,12 +24,13 @@ elastic_mapping = {
             {
                 "title": {"type": "text"},
                 "description": {"type": "text"},
-                "publish_date": {"type": "date", "format": "yyyy-MM-dd"},
+                "publish_date": {"type": "date", "format": "yyyyMMddHHmmss"},
                 "predictedString": {"type": "text", "fielddata": True},
-                "prediction": {"type": "byte"},
+                "source_url": {"type": "text"},
                 "country_name": {"type": "text"},
                 "country_code": {"type": "keyword"},
-                "location": {"type": "geo_point"}
+                "location": {"type": "geo_point"},
+                "host": {"type": "text", "fielddata": True}
             }
     }
 }
@@ -37,7 +38,6 @@ elastic_mapping = {
 # Define articles schema structure to be readed from kafka
 articlesSchema = types.StructType([
     types.StructField(name='_c0', dataType=types.StringType()),
-    types.StructField(name='publish_date', dataType=types.StringType()),
     types.StructField(name='country_name', dataType=types.StringType()),
     types.StructField(name='country_code', dataType=types.StringType()),
     types.StructField(name='latitude', dataType=types.StringType()),
@@ -45,12 +45,14 @@ articlesSchema = types.StructType([
     types.StructField(name='source_url', dataType=types.StringType()),
     types.StructField(name='title', dataType=types.StringType()),
     types.StructField(name='description', dataType=types.StringType()),
-    types.StructField(name='text', dataType=types.StringType())
+    types.StructField(name='text', dataType=types.StringType()),
+    types.StructField(name='publish_date', dataType=types.StringType()),
 ])
 
 
 # create elasticsearch session and index
 es = Elasticsearch(elastic_host, verify_certs=False)
+print("______________________________________________")
 es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
 
@@ -92,22 +94,21 @@ def main() :
         .option("startingOffsets", "earliest") \
         .option("subscribe", topic) \
         .load() \
-        .selectExpr("CAST(timestamp AS STRING)", "CAST(value AS STRING)") \
-        .select("timestamp", from_json(col("value").cast("string"), articlesSchema).alias("data")) \
-        .selectExpr("timestamp", "data.*") \
+        .selectExpr("CAST(value AS STRING)") \
+        .select(from_json(col("value").cast("string"), articlesSchema).alias("data")) \
+        .selectExpr("data.*") \
         .na.drop() # There is only one row that container all headers to None that cause crash
 
     # Apply the machine learning model and select only the interesting casted columns
     df = model.transform(df) \
         .withColumn("latitude", df.latitude.cast(types.DoubleType())) \
         .withColumn("longitude", df.longitude.cast(types.DoubleType())) \
-        .withColumn("location", array(col('longitude'), col('latitude'))) \
-        .withColumn("publish_date", to_date(df.publish_date, "yyyyMMdd"))
+        .withColumn("location", array(col('longitude'), col('latitude')))
 
     result = df.select("title", "description", "publish_date", "predictedString", \
-                        "prediction","country_name", "country_code", "location") \
-    .withColumn("prediction", df.prediction.cast(types.IntegerType()))
-
+                        "source_url","country_name", "country_code", "location") \
+                .selectExpr("*", "parse_url(source_url, 'HOST') AS host")
+    
     result.writeStream\
     .foreachBatch(process_batch) \
     .start() \
