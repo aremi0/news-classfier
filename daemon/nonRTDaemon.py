@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from io import BytesIO
 from bs4 import BeautifulSoup
 import re
+import threading
 
 TIMER = 30.0
 
@@ -52,34 +53,30 @@ async def parallelizer(dataframe) :
     
 def extractData(zip, fileName) :
     my_cols = [str(i) for i in range(61)] # create some col names
-    my_cols[1] = "publish_date"
     my_cols[52] = "country_name"
     my_cols[53] = "country_code"
     my_cols[56] = "latitude"
     my_cols[57] = "longitude"
     my_cols[60] = "source_url"
-    sourceDF = pandas.read_csv(zip.open(fileName), sep="\t", header=None, names=my_cols, usecols=[1, 52, 53, 56, 57, 60])
+    sourceDF = pandas.read_csv(zip.open(fileName), sep="\t", header=None, names=my_cols, usecols=[52, 53, 56, 57, 60])
     #print(sourceDF.info(verbose=True))
     #print(sourceDF[["EVENT_ID", "PUBLISH_DATE"]])
     return sourceDF
 
 def cleanDF(dataframe) :
     filteredDF = dataframe.query("latitude != longitude")
-    filteredDF = filteredDF.dropna(subset = ["publish_date", "country_name", \
-        "country_code", "latitude", "longitude", "source_url"])
+    filteredDF = filteredDF.dropna(subset = ["country_name", "country_code", \
+                                             "latitude", "longitude", "source_url"])
     filteredDF = filteredDF.drop_duplicates(subset='source_url', keep="first")
     filteredDF = filteredDF.assign(title=numpy.nan, description=numpy.nan, text=numpy.nan) # Adding new column 'title' and text filled with nan
 
     return filteredDF
 
+def todaysDF(url) :
+    print("____thread_1__todaysDF____")
+    counter = 1
 
-def main() :
-    print("----Daemon Section----")
-
-    # url of the zip containing CSV file (master)
-    masterUrl = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
-
-    with requests.get(masterUrl) as response :
+    with requests.get(url) as response :
         
         master = response.text.split()
         masterExp = [s for s in master if "export" in s]
@@ -93,16 +90,75 @@ def main() :
             
             # Cleaning dataframe section-----
             filteredDF = cleanDF(dataframe)
-            print(filteredDF.info(verbose=True))
-            print("----Scraper Section----")
+            #print(filteredDF.info(verbose=True))
             
+            print("----Scraper Section----")
             asyncio.run(parallelizer(filteredDF))
 
             filteredDF = filteredDF.dropna() # again, to remove unrechable url rows and rows with empty title
+            filteredDF["publish_date"] = fileInsideZip.split(sep=".")[0]
             path = "./dataframe/" + fileInsideZip.split(sep=".")[0] + ".csv"
             filteredDF.to_csv(path, sep="\t")  
-            print(path)
+            print(f"(nRT.{counter})", path)
+            counter = counter + 1
             print("Valid url entries: ", len(filteredDF))
+
+def realtimeDF(url) :
+    print("____thread_2__realtimeDF____")
+
+    olderDataframeUrl = " "
+    counter = 0
+
+    while True :
+        with requests.get(url) as response :
+            # response is a txt, our file is [...]export.csv.zip which is after two string
+            updatedDataframeUrl = response.text.split()[2]
+
+            if (olderDataframeUrl == updatedDataframeUrl) :
+                # await 15 minutes
+                print("...waiting 15minutes for next dataframe")
+                time.sleep(15 * 60)
+                continue
+            else:
+                # dataframe was updated
+                counter = counter + 1
+                print("...new dataframe uploaded: ", updatedDataframeUrl)
+                olderDataframeUrl = updatedDataframeUrl
+
+                with ZipFile(BytesIO(requests.get(updatedDataframeUrl).content)) as myZip :
+                    fileInsideZip = myZip.namelist()[0]
+                    dataframe = extractData(myZip, fileInsideZip)
+
+        # Cleaning dataframe section-----
+        filteredDF = cleanDF(dataframe)
+        #print(filteredDF.info(verbose=True))
+
+        print("----Scraper Section----")
+        asyncio.run(parallelizer(filteredDF))
+
+        filteredDF = filteredDF.dropna() # again, to remove unrechable url rows and rows with empty title
+        date = fileInsideZip.split(sep=".")[0]
+        filteredDF["publish_date"] = date # Create a column with fixed date value equivalent to filename from gdelt
+        path = "./dataframe/" + date + ".csv"
+        filteredDF.to_csv(path, sep="\t")  
+        filteredDF.info()
+        print(f"(RT.{counter})", path)
+        print("Valid url entries: ", len(filteredDF))
+
+
+
+def main() :
+    # url of the zip containing CSV file (master)
+    masterUrl = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
+    realtimeUrl = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
+
+    t1 = threading.Thread(target=todaysDF, args=(masterUrl,))
+    t2 = threading.Thread(target=realtimeDF, args=(realtimeUrl,))
+    #t1.start()
+    t2.start()
+
+    #t1.join()
+    t2.join()
             
 
 if __name__ == "__main__":
