@@ -1,12 +1,6 @@
-# 17 classi non ambigue => 125.000 text di esercitazione con df splittato al 85%
-# Naive Bayes con parametri defalt => numFeatures ottimale 250.000
-# accuracy massima ottenuta 72.5%
-
-print("__________trainer_17_NaiveBayes__________")
-
 from pyspark.ml import Pipeline # pipeline to transform data
 from pyspark.sql import SparkSession, SQLContext # to initiate spark
-from pyspark.sql.functions import concat_ws, when, regexp_replace
+from pyspark.sql.functions import concat_ws, when, regexp_replace, lit
 from pyspark.ml.feature import StringIndexer, IndexToString # indexer
 from pyspark.ml.feature import RegexTokenizer # tokenizer
 from pyspark.ml.feature import HashingTF, IDF # vectorizer
@@ -16,8 +10,9 @@ from pyspark.ml.evaluation import MulticlassClassificationEvaluator # to evaluat
 from pyspark.mllib.evaluation import MulticlassMetrics # # performance metrics
 
 
-trainingPath = "/opt/tap/training/17class"
-datasetPath = "/opt/tap/dataset/*.json"
+trainingPath = "/opt/tap/training"
+generalDatasetPath = "/opt/tap/dataset/News_Category_Dataset_v3.json"
+warDatasetPath = "/opt/tap/dataset/war-news.csv"
 
 # Remaining class: sports, politics, entertainment, environment, tech, business, style&beauty, 
 # religion, education, travel, crime, rights, food&drink, arts&colture, world-news, science, wellness
@@ -28,7 +23,7 @@ def dataframeCleaner(df) :
                                 df.category.contains("GREEN") |\
                                 df.category.contains("U.S. NEWS") |\
                                 df.category.contains("MONEY") |\
-                                df.category.contains("IMPACT") |\
+                                df.category.contains("WORLD NEWS") |\
                                 df.category.contains("WEDDINGS") |\
                                 df.category.contains("HOME & LIVING") |\
                                 df.category.contains("TASTE") |\
@@ -41,6 +36,8 @@ def dataframeCleaner(df) :
                                 df.category.contains("MEDIA") |\
                                 df.category.contains("COLLEGE") |\
                                 df.category.contains("WOMEN") |\
+                                df.category.contains("IMPACT") |\
+                                df.category.contains("TRAVEL") |\
                                 df.category.contains("DIVORCE"))
     df = df.join(rows_to_delete, on=["category"], how='left_anti')
 
@@ -58,10 +55,12 @@ def dataframeCleaner(df) :
 
     df = df.withColumn("text", concat_ws(" ", "headline", "short_description")) # Add a new column 'text' by concatinating 'headline' and 'short_description'
     df = df.select("category", "text") # Remove old text columns
+    return df
 
+def charCleaner(df) :
+    # Replace all the not (^) specified char with empty (will replace special char)
     df = df.select(regexp_replace("category", "[^a-zA-Z0-9]+", "").alias("category"), \
-                    regexp_replace("text", "[^a-zA-Z0-9\s]+", "").alias("text")) # Replace all the not (^) specified char with empty (will replace special char)
-
+                    regexp_replace("text", "[^a-zA-Z0-9\s]+", "").alias("text"))
     return df
 
 def printCategory(spark, df) :
@@ -75,6 +74,8 @@ def printCategory(spark, df) :
     #exit(0)
 
 def main() :
+    print("__________trainer__________")
+
     # create a new spark session
     spark = SparkSession.builder.master("local[*]")\
                                 .appName("news classfier")\
@@ -82,13 +83,28 @@ def main() :
     spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
 
     # load dataset
-    print("Reading training set...")
-    df = spark.read.json(datasetPath)
+    print("Reading war training set...")
+    warDF = spark.read.csv(warDatasetPath, inferSchema=True, header=True)
+    
+    warDF = warDF.withColumn("text", concat_ws(" ", "Headlines", "Summary"))
+    warDF = warDF.withColumn("category", lit("WAR"))
+    warDF = warDF.select("category", "text")
+    warDF = charCleaner(warDF)
     print("... done.")
+
+
+    print("Reading news training set...")
+    newsDF = spark.read.json(generalDatasetPath)
+
+    newsDF = dataframeCleaner(newsDF)
+    newsDF = charCleaner(newsDF)
+    print("... done.")
+
+    print("Merging training set...")
+    df = newsDF.union(warDF)
+    print("... done.")
+
     df.printSchema()
-
-    df = dataframeCleaner(df)
-
     printCategory(spark, df)
 
     labelIndexer = StringIndexer(inputCol="category", outputCol="label").fit(df) # Mapping a string column of class/category to an ML column of label indices
@@ -109,7 +125,7 @@ def main() :
 
     #rescaled_data = idf_vectorizer.transform(featurized_data)
 
-    #(train, test) = df.randomSplit([0.85, 0.15], seed = 202)
+    (train, test) = df.randomSplit([0.85, 0.15], seed = 202)
     
     
     nb = NaiveBayes(modelType="multinomial")
@@ -122,7 +138,7 @@ def main() :
 
     pipeline = Pipeline(stages=[labelIndexer, tokenizer, stopwords_remover,
                                 hashing_tf, idf, nb, categoryConverter])
-    pipelineFit = pipeline.fit(df)
+    pipelineFit = pipeline.fit(train)
 
     # Saving models in local on the mounted volume to be loaded later
     pipelineFit.write().overwrite().save(trainingPath)
@@ -134,15 +150,15 @@ def main() :
     #pipelineFit = pipeline.fit(train)
 
     # show top 20 predictions
-    #predictions = pipelineFit.transform(test)
+    predictions = pipelineFit.transform(test)
     #predictions.select("prediction", "label").show()
 
     # to evalute model
-    #evaluator = MulticlassClassificationEvaluator(
-    #    labelCol="label", predictionCol="prediction", metricName="accuracy")
+    evaluator = MulticlassClassificationEvaluator(
+        labelCol="label", predictionCol="prediction", metricName="accuracy")
 
     #accuracy = evaluator.evaluate(predictions)
-    #print("______________-Test-set Accuracy is : ", evaluator.evaluate(predictions)) # print test accuracy
+    print(f"Accuracy is: {evaluator.evaluate(predictions) * 100 : .2f}%") # print test accuracy
     #-----------
 
 

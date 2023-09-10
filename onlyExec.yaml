@@ -6,9 +6,9 @@
 
 
     #--- Spark ---  
-    sparkTrainer:
+    sparkExecutor:
       image: tap:sparkP
-      container_name: sparkTrainer
+      container_name: sparkExecutor
       environment:
         - SPARK_ACTION=bash
       volumes:
@@ -18,9 +18,12 @@
         - tap
       ports:
         - 4040:4040
-      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/trainer.py
-      # to run an interactive container for exploring the machine:
-      # docker run --entrypoint /bin/bash -v training:/opt/tap/training -it tap:sparkP
+      command: spark-submit --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.1.2,org.elasticsearch:elasticsearch-spark-30_2.12:8.2.0 --master local[*] /opt/tap/executor.py
+      deploy:
+        resources:
+          limits:
+            cpus: '0.5'
+            memory: 1.9g
 
 
   volumes:
