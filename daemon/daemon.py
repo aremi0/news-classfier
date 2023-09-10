@@ -68,7 +68,7 @@ def cleanDF(dataframe) :
     filteredDF = filteredDF.dropna(subset = ["country_name", "country_code", \
                                              "latitude", "longitude", "source_url"])
     filteredDF = filteredDF.drop_duplicates(subset='source_url', keep="first")
-    filteredDF = filteredDF.assign(title=numpy.nan, description=numpy.nan, text=numpy.nan) # Adding new column 'title' and text filled with nan
+    filteredDF = filteredDF.assign(title=" ", description=" ", text=" ") # Adding new column 'title' and text filled with nan
 
     return filteredDF
 
