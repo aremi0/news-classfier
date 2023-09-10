@@ -20,8 +20,10 @@ else:
 
 
 
-# localhost:8080 to see kafka-UI (broker status, topic, messages, ...)
-# localhost:4040 to see spark-cluster
-# localhost:9200 to see elasticsearch-cluster
-# localhost:9200/es_index to see elasticsearch index created in sparkExecutor
-# localhost:5601 for kibana data views
+# curl -f localhost:8080        #to see kafka-UI (broker status, topic, messages, ...)
+# curl -f localhost:4040        #to see spark-cluster
+# curl -f localhost:9200        #to see elasticsearch-cluster
+# curl -f localhost:9200/news_index #to see elasticsearch index created in sparkExecutor
+# curl -f localhost:5601 #for kibana data views
+
+# docker run -it --entrypoint /bin/bash --volume news-classifier-tap_dataframe:/app/dataframe tap:daemon
