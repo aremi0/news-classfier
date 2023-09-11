@@ -15,11 +15,6 @@
         - tap
       volumes:
         - dataframe:/app/dataframe
-      deploy:
-        resources:
-          limits:
-            cpus: '0.7'
-            memory: 500m
 
   volumes:
     dataframe:
