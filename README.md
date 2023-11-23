@@ -1,12 +1,12 @@
 # World News Classfier
 
 ## TODO:
-- [x] Modificare il demone per fargli scaricare parte del database di GDELT, così da avere a fine pipeline quache milione di record in kibana.
+- [ ] Modificare il demone per fargli scaricare parte del database di GDELT, così da avere a fne pipeline quache milione di record in kibana.
 - [ ] Modificare sparkExector in modo da fargli elaborare soltanto una volta i dataframe "vecchi", salvandoli magari in un volume convidiviso. Quindi dovrà soltanto inviare i dati già elaborati ad elasticsearch e poi elaborare qualli che arrivano in real-time.
 - [ ] Eliminare la batch in elasticsearch facendogli mandare direttamente i dati a kibana.
 - [x] Sistemare in elasticsearch/kibana il date format per usare il publish_date come riferimento temporale.
 - [x] Aggiungere più info in kibana.
-- [x] Migliorare la presentazione.
+- [ ] Migliorare la presentazione.
 - [ ] Aggiungere altre visualizzazioni grafiche.
 ---  
 Attualmente il demone scaricherà i dataframe del giorno odierno caricati fino all'istante in cui viene lanciato.  

@@ -12,6 +12,9 @@ RUN yum -y install python3
 RUN yum -y install glibc
 RUN pip3 install pyspark numpy elasticsearch
 
+#RUN pip3 -y uninstall urllib3
+RUN pip3 install 'urllib3<2.0'
+
 ADD code/requirements.txt /code/requirements.txt
 RUN pip3 install -r /code/requirements.txt
 

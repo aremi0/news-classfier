@@ -26,4 +26,4 @@ else:
 # curl -f localhost:9200/news_index #to see elasticsearch index created in sparkExecutor
 # curl -f localhost:5601 #for kibana data views
 
-# docker run -it --entrypoint /bin/bash --volume news-classifier-tap_dataframe:/app/dataframe tap:daemon
+# docker run -it --entrypoint /bin/bash --volume news-classfier-56534b556b082675e532fa4f7d22038360b1e555_dataframe:/app/dataframe tap:daemon

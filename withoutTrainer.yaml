@@ -63,21 +63,6 @@
             condition: service_started
 
 
-    kafka-ui:
-        image: provectuslabs/kafka-ui:latest
-        container_name: kafkaWebUI
-        environment:
-            - KAFKA_CLUSTERS_0_NAME=local
-            - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafkaServer:9092
-        ports: 
-            - 8080:8080
-        networks: 
-            - tap
-        depends_on:
-            kafkaserver:
-              condition: service_started
-
-
     #--- fluentd ---
     fluentd:
       container_name: fluentd

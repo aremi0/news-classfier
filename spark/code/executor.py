@@ -56,22 +56,6 @@ print("______________________________________________")
 es.indices.create(index=elastic_index, body=elastic_mapping, ignore=400)
 
 
-def process_batch(batch_df, batch_id) :
-    if batch_df.count() > 1 :
-        print("___batch_id: ", batch_id)
-        print("___batch_df__SIZE: ", batch_df.count())
-        batch_df.printSchema()
-        batch_df.show()
-
-        for idx, row in enumerate(batch_df.collect()) :
-            row_dict = row.asDict()
-            #print("___row_dict: ", row_dict)
-            id = f'{batch_id}-{idx}'
-            es.index(index=elastic_index, id=id, document=row_dict)
-
-        print("___data sended to elasticsearch...")
-
-
 def main() :
     if not exists(trainingPath):
         print("There's no trained model here! You have to execute Trainer first!")
@@ -81,6 +65,9 @@ def main() :
     # create a new spark session
     spark = SparkSession.builder.master("local[*]")\
                                 .appName(APP_NAME)\
+                                .config("spark.es.nodes", elastic_host)\
+                                .config("spark.es.nodes.wan.only", "true")\
+                                .config("spark.es.net.ssl", "true")\
                                 .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR") # Reduce the verbosity of logging messages
 
@@ -100,6 +87,7 @@ def main() :
         .na.drop() # There is only one row that container all headers to None that cause crash
 
     # Apply the machine learning model and select only the interesting casted columns
+    print("Applying ml model to data before transfer...")
     df = model.transform(df) \
         .withColumn("latitude", df.latitude.cast(types.DoubleType())) \
         .withColumn("longitude", df.longitude.cast(types.DoubleType())) \
@@ -109,10 +97,16 @@ def main() :
                         "source_url","country_name", "country_code", "location") \
                 .selectExpr("*", "parse_url(source_url, 'HOST') AS host")
     
-    result.writeStream\
-    .foreachBatch(process_batch) \
-    .start() \
-    .awaitTermination()
+    print("Moving data to elasticsearch...")
+    query = result.writeStream \
+        .outputMode("append") \
+        .format("org.elasticsearch.spark.sql") \
+        .option("checkpointLocation", "/tmp/") \
+        .option("es.resource", elastic_index) \
+        .option("es.nodes", elastic_host) \
+        .start()
+    
+    query.awaitTermination()
 
 
 if __name__ == "__main__":

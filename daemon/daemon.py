@@ -10,6 +10,7 @@ from io import BytesIO
 from bs4 import BeautifulSoup
 import re
 import threading
+import sys
 
 TIMER = 30.0
 
@@ -72,7 +73,8 @@ def cleanDF(dataframe) :
 
     return filteredDF
 
-def todaysDF(url) :
+def todaysDF(url, latestCsv) :
+
     print("____thread_1__todaysDF____")
     counter = 1
 
@@ -81,6 +83,11 @@ def todaysDF(url) :
         master = response.text.split()
         masterExp = [s for s in master if "export" in s]
         today = date.today().strftime("%Y%m%d")
+
+        if (latestCsv) :
+            print("___ latestCsv is initializated: " + latestCsv)
+            today = latestCsv
+
         todaysDF = [s for s in masterExp if today in s]
 
         for match in todaysDF :
@@ -153,7 +160,7 @@ def main() :
     masterUrl = "http://data.gdeltproject.org/gdeltv2/masterfilelist.txt"
     realtimeUrl = "http://data.gdeltproject.org/gdeltv2/lastupdate.txt"
 
-    t1 = threading.Thread(target=todaysDF, args=(masterUrl,))
+    t1 = threading.Thread(target=todaysDF, args=(masterUrl, sys.argv[1]))
     t2 = threading.Thread(target=realtimeDF, args=(realtimeUrl,))
     t1.start()
     t2.start()
